@@ -1,0 +1,3587 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Code 团队如何做代码评审｜文章解读</title>
+    
+    <script>
+      /* 主题：在首次绘制前决定，避免闪烁。三态 light / dark / system。 */
+      (function () {
+        var t = null;
+        try {
+          t = localStorage.getItem("show-me-theme");
+        } catch (e) {}
+        if (t !== "light" && t !== "dark") t = "system";
+        var dark =
+          t === "dark" ||
+          (t === "system" &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+    <style data-show-me="css">/* show-me-html owned visual system. Inlined into every generated page. */
+
+:root {
+  color-scheme: light;
+  --font-serif:
+    Newsreader, "Noto Serif SC", Georgia, "Iowan Old Style", "Times New Roman",
+    "Han Serif Balanced", "Source Han Serif SC", "Songti SC", STSong, SimSun,
+    serif;
+  --font-sans:
+    "IBM Plex Sans", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "IBM Plex Mono", "SF Mono", SFMono-Regular, Menlo, Consolas, "PingFang SC",
+    "Microsoft YaHei", ui-monospace, monospace;
+
+  /* ── Design tokens · 原语层 ─────────────────────────────────────
+     只有这一层允许字面色值。深色主题只重定义 --ink / --paper，
+     其余所有角色色都由下面的派生层用 color-mix 从两极算出。
+     换主题 = 换两极；换品牌 = 换 --hero。 */
+  --ink: #1c1c1a;
+  --paper: #f0efeb;
+  --hero: #f5572f; /* 唯一落点：焦点环、关键连线、图表主角、危险 */
+  /* 反色用的两极镜像：暗卡把它们接到自己的 --ink / --paper 上 */
+  --ink-rev: var(--paper);
+  --paper-rev: var(--ink);
+  --tone-clay: var(--hero);
+  --tone-fig: #b75d82;
+  --tone-sky: #4e8ccf;
+  --tone-cactus: #5c9d91;
+  --tone-olive: #6f8f45;
+  --tone-heather: #7772b5;
+  --tone-kraft: #b47a45;
+  --tone-manilla: #d5a72f;
+}
+
+/* 派生层挂在 :root 与暗卡两处：暗卡局部换极后，这一整层在卡内重新算一遍 */
+:root,
+.card[data-variant="ink"] {
+  /* ── 派生层 · 明度阶（墨在纸上的占比） ── */
+  --ink-90: color-mix(in oklab, var(--ink) 90%, var(--paper));
+  --ink-70: color-mix(in oklab, var(--ink) 70%, var(--paper));
+  /* 次要文字：卡面上亮 5.2:1、暗 5.9:1 */
+  --ink-65: color-mix(in oklab, var(--ink) 65%, var(--paper));
+  --ink-60: color-mix(in oklab, var(--ink) 60%, var(--paper));
+  --ink-45: color-mix(in oklab, var(--ink) 45%, var(--paper));
+  --ink-30: color-mix(in oklab, var(--ink) 30%, var(--paper));
+  --ink-22: color-mix(in oklab, var(--ink) 22%, var(--paper));
+  --ink-14: color-mix(in oklab, var(--ink) 14%, var(--paper));
+  --ink-8: color-mix(in oklab, var(--ink) 8%, var(--paper));
+  --ink-4: color-mix(in oklab, var(--ink) 4%, var(--paper));
+
+  /* ── 派生层 · 角色 ── */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--ink-4);
+  --card-foreground: var(--ink);
+  --popover: var(--ink-8);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper);
+  --secondary: var(--ink-8);
+  --secondary-foreground: var(--ink);
+  --muted: var(--ink-8);
+  --muted-foreground: var(--ink-65);
+  --accent: var(--ink-14);
+  --accent-foreground: var(--ink);
+  --destructive: var(--hero);
+  /* 纸色字压在主角色上只有 2.9:1；固定深墨两种主题都是 5.2:1 */
+  --destructive-foreground: var(--ink-fixed);
+  --border: var(--ink-14);
+  --input: var(--ink-30);
+  --ring: var(--hero);
+  /* 主角色写字：纯 --hero 在亮色卡面上只有 2.7:1，掺四成墨后亮 5.3:1、暗 7.5:1；图形仍用 --hero */
+  --hero-text: color-mix(in oklab, var(--hero) 60%, var(--ink));
+  --link-accent: var(--hero-text); /* 原为主角色掺三成墨，卡面上只有 4.4:1 */
+  --ink-fixed: #1c1c1a;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* 图表：明度即数据。--chart-1 最重要（最黑，深色下最亮），依次变浅；
+     --chart-hero 只给一张图里的一个主角元素。 */
+  --chart-1: var(--ink);
+  --chart-2: var(--ink-70);
+  --chart-3: var(--ink-45);
+  --chart-4: var(--ink-30);
+  --chart-5: var(--ink-22);
+  --chart-hero: var(--hero);
+  --chart-hero-text: var(--hero-text);
+  --syn-comment: var(--ink-45);
+  --syn-keyword: var(--ink);
+  --syn-string: var(--ink-60);
+  --syn-type: var(--ink-70);
+  --syn-number: color-mix(in oklab, var(--hero) 65%, var(--ink));
+}
+
+:root {
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1.5rem;
+  --page: 60rem;
+  --gutter: clamp(1rem, 3vw, 2rem);
+  --toc-w: 13rem;
+  --toc-gap: 3rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3.5rem;
+  --shadow-raised:
+    0 1px 1px rgb(23 32 51 / 0.05), 0 8px 24px rgb(23 32 51 / 0.07);
+  --ease-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-physical: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html.dark,
+.dark {
+  color-scheme: dark;
+  --ink: #f0efeb;
+  --paper: #1c1c1a;
+  --shadow-raised: 0 1px 1px rgb(0 0 0 / 0.18), 0 12px 32px rgb(0 0 0 / 0.2);
+}
+
+/* ── 反色：一页一块暗卡 ────────────────────────────────────────
+   卡内墨纸互换，派生层在同一选择器上重算，所以卡内的次要文字、边界、图表阶
+   和 .hl 全部自动反过来；深色主题下它就是那块亮卡。反色与 --hero 共用一个
+   强调预算：一页最多一块，build.py 超过即 WARN。放唯一的决定性数字或结论。 */
+.card[data-variant="ink"] {
+  --ink: var(--ink-rev);
+  --paper: var(--paper-rev);
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+[data-tone="clay"] {
+  --tone: var(--tone-clay);
+}
+[data-tone="fig"] {
+  --tone: var(--tone-fig);
+}
+[data-tone="sky"] {
+  --tone: var(--tone-sky);
+}
+[data-tone="cactus"] {
+  --tone: var(--tone-cactus);
+}
+[data-tone="olive"] {
+  --tone: var(--tone-olive);
+}
+[data-tone="heather"] {
+  --tone: var(--tone-heather);
+}
+[data-tone="kraft"] {
+  --tone: var(--tone-kraft);
+}
+[data-tone="manilla"] {
+  --tone: var(--tone-manilla);
+}
+[data-tone] {
+  --tone-surface: color-mix(in oklab, var(--tone) 13%, var(--color-card));
+  --tone-edge: transparent;
+  --tone-ink: color-mix(in oklab, var(--tone) 58%, var(--color-foreground));
+}
+.dark [data-tone] {
+  --tone-surface: color-mix(in oklab, var(--tone) 18%, var(--color-card));
+  --tone-edge: transparent;
+  --tone-ink: color-mix(in oklab, var(--tone) 72%, var(--color-foreground));
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+a {
+  color: inherit;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button,
+[role="button"],
+[role="tab"],
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.lucide {
+  width: 1em;
+  height: 1em;
+  stroke-width: 1.75;
+}
+
+.btn {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.875rem;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition-property:
+    background-color, border-color, color, box-shadow, transform;
+  transition-duration: 140ms;
+  transition-timing-function: var(--ease-expo);
+}
+.btn:hover:not(:disabled) {
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 88%,
+    var(--color-foreground)
+  );
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.btn[data-variant="secondary"] {
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+}
+.btn[data-variant="outline"] {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-foreground);
+}
+.btn[data-variant="ghost"] {
+  background: transparent;
+  color: var(--color-foreground);
+}
+.btn[data-variant="link"] {
+  min-height: auto;
+  padding-inline: 0;
+  background: transparent;
+  color: var(--link-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.btn[data-variant="destructive"] {
+  background: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+}
+.btn[data-variant="outline"]:hover:not(:disabled),
+.btn[data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+.btn[data-size="sm"] {
+  min-height: 2rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+}
+.btn[data-size="lg"] {
+  min-height: 2.875rem;
+  padding-inline: 1rem;
+}
+.btn[data-size="icon"],
+.btn[data-size="icon-sm"] {
+  width: 2.5rem;
+  padding: 0;
+}
+.btn[data-size="icon-sm"] {
+  width: 2rem;
+  min-height: 2rem;
+}
+.button-group {
+  display: inline-flex;
+  align-items: center;
+}
+.button-group > .btn {
+  border-radius: 0;
+  margin-inline-start: -1px;
+}
+.button-group > .btn:first-child {
+  margin-inline-start: 0;
+  border-start-start-radius: var(--radius-sm);
+  border-end-start-radius: var(--radius-sm);
+}
+.button-group > .btn:last-child {
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
+}
+
+.card {
+  min-width: 0;
+  border: 1px solid transparent; /* 卡片靠面色与留白分卡，不靠描边 */
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  color: var(--color-card-foreground);
+  overflow: clip;
+  /* 内边距住在卡本身，不住在 header / section / footer 上 ——
+     三段都是可选的（components.md），内边距挂在三段上时，卡里直接写 <p>
+     就四条边都贴边，而且不报错、只难看。 */
+  padding: 1rem 1.125rem;
+}
+.card[data-size="sm"] {
+  padding: 0.75rem 0.875rem;
+}
+.card[data-tone],
+.alert[data-tone],
+.item[data-tone] {
+  background: var(--tone-surface);
+  border-color: var(--tone-edge);
+}
+/* 段与段的间隔：原来由上一段的下内边距加下一段的上内边距凑出，现在写成一个外边距 */
+.card > :is(header, section, footer) + :is(header, section, footer) {
+  margin-block-start: 1.25rem;
+}
+.card[data-size="sm"]
+  > :is(header, section, footer)
+  + :is(header, section, footer) {
+  margin-block-start: 1rem;
+}
+.card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  /* header / section / footer 之间不画分隔线：卡内靠留白分段，和分卡的原则一致 */
+}
+/* 首尾元素的浏览器默认外边距不再叠在内边距上：卡的内边距就是全部留白。
+   直接子元素也吃这条 —— 裸 <p> 的卡靠它拿到干净的上下边距。 */
+.card > :first-child,
+.card > header > :is(h2, h3, p),
+.card > :is(section, footer) > :first-child {
+  margin-block-start: 0;
+}
+.card > :last-child,
+.card > :is(section, footer) > :last-child {
+  margin-block-end: 0;
+}
+.card > footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+.card-action {
+  flex: none; /* 标题组占满剩余宽度时，动作区不能被挤成竖排 */
+  margin-inline-start: auto;
+}
+
+.badge {
+  min-height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  justify-self: start; /* 直接放进 grid 容器时别被拉成整格宽：它是标签，宽度跟着文字走 */
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 35%, var(--color-border));
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  background: color-mix(in oklab, var(--color-primary) 10%, var(--color-card));
+  color: color-mix(in oklab, var(--color-primary) 72%, var(--color-foreground));
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.badge[data-variant="secondary"] {
+  border-color: var(--color-border);
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+}
+.badge[data-variant="outline"] {
+  background: transparent;
+  color: var(--color-foreground);
+}
+.badge[data-variant="destructive"] {
+  border-color: color-mix(
+    in oklab,
+    var(--color-destructive) 38%,
+    var(--color-border)
+  );
+  background: color-mix(
+    in oklab,
+    var(--color-destructive) 12%,
+    var(--color-card)
+  );
+  color: var(--hero-text);
+}
+.badge[data-tone] {
+  background: var(--tone-surface);
+  border-color: var(--tone-edge);
+  color: var(--tone-ink);
+}
+
+.alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.875rem 1rem;
+  background: var(--color-card);
+}
+.alert > :is(svg, .lucide) {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  margin-block-start: 0.15rem;
+  color: var(--color-primary);
+}
+.alert > :is(h2, h3, h4) {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+}
+.alert > section {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+.alert > section > * {
+  margin-block: 0;
+}
+.alert > section > * + * {
+  margin-block-start: 0.25rem;
+}
+.alert[data-variant="destructive"] {
+  border-color: color-mix(
+    in oklab,
+    var(--color-destructive) 45%,
+    var(--color-border)
+  );
+  background: color-mix(
+    in oklab,
+    var(--color-destructive) 9%,
+    var(--color-card)
+  );
+}
+.alert[data-variant="destructive"] > :is(svg, .lucide) {
+  color: var(--color-destructive);
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-card);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.table th,
+.table td {
+  padding: 0.75rem 0.875rem;
+  text-align: start;
+  vertical-align: top;
+  border-block-end: 1px solid var(--color-border);
+}
+.table th {
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  word-break: keep-all;
+}
+/* 中文的最小内容宽度只有一个字：不加约束时，窄屏下表头被挤成一字一行、格内 badge 折成多行药丸，
+   表格永远不比容器宽，.table-container 的横向滚动也就不会出现。表头只在空格和标点处断行，
+   badge 不断行；放不下时整表横向滚动，正文格照常折行。 */
+.table .badge {
+  white-space: nowrap;
+}
+.table tr:last-child > * {
+  border-block-end: 0;
+}
+.table tbody tr:hover {
+  background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.item-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-card);
+  overflow: clip;
+}
+.item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+}
+.item + .item {
+  border-block-start: 1px solid var(--color-border);
+}
+/* 文档示例在条目之间写 <hr />：它不是 .item，.item + .item 的分隔线不会出现，
+   由它自己画这条线。不清掉默认样式时它是网格里一个 2px 的点，上下各多出 8px */
+.item-group > hr {
+  margin: 0;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+}
+.item > figure {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.item > section > * {
+  margin-block: 0;
+}
+.item > section > * + * {
+  margin-block-start: 0.2rem;
+}
+
+.accordion,
+details {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-card);
+}
+.accordion > details {
+  border: 0;
+  border-radius: 0;
+}
+.accordion > details + details {
+  border-block-start: 1px solid var(--color-border);
+}
+summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::after {
+  content: "+";
+  margin-inline-start: auto;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+}
+details[open] > summary::after {
+  content: "−";
+}
+details > :not(summary) {
+  margin-inline: 1rem;
+}
+details > :last-child {
+  margin-block-end: 1rem;
+}
+
+.tabs > [role="tablist"] {
+  display: flex;
+  gap: 0.25rem;
+  border-block-end: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+.tabs [role="tab"] {
+  min-height: 2.5rem;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tabs [role="tab"][aria-selected="true"] {
+  border-block-end-color: var(--color-primary);
+  color: var(--color-foreground);
+}
+.tabs [role="tabpanel"] {
+  padding-block: 1rem;
+}
+
+.dropdown-menu,
+.popover {
+  position: relative;
+}
+.dropdown-menu [role="menu"],
+.dropdown-menu [data-popover],
+.popover [data-popover] {
+  z-index: 20;
+  min-width: 12rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.375rem;
+  background: var(--color-popover);
+  color: var(--color-popover-foreground);
+  box-shadow: var(--shadow-raised);
+}
+.dropdown-menu [role="menuitem"] {
+  min-height: 2.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.625rem;
+  cursor: pointer;
+}
+.dropdown-menu [role="menuitem"]:hover,
+.dropdown-menu [role="menuitem"]:focus-visible {
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.dialog,
+.alert-dialog,
+dialog {
+  max-width: min(34rem, calc(100% - 2rem));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  background: var(--color-popover);
+  color: var(--color-popover-foreground);
+  box-shadow: var(--shadow-raised);
+}
+dialog::backdrop {
+  background: rgb(9 14 24 / 0.62);
+  backdrop-filter: blur(2px);
+}
+dialog > :is(header, section, footer) {
+  padding: 1rem 1.125rem;
+}
+dialog > header {
+  border-block-end: 1px solid var(--color-border);
+}
+dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  border-block-start: 1px solid var(--color-border);
+}
+
+.field,
+.fieldset {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.field > :is(label, .label),
+.fieldset > legend,
+.label {
+  color: var(--color-muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.input,
+.textarea,
+.select,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+textarea,
+select,
+[contenteditable="true"] {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  background: var(--color-card);
+  color: var(--color-foreground);
+  transition-property: border-color, box-shadow, background-color;
+  transition-duration: 140ms;
+}
+textarea,
+.textarea,
+[contenteditable="true"] {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.55;
+}
+.input-group {
+  display: flex;
+  align-items: stretch;
+}
+.input-group > * {
+  border-radius: 0;
+}
+.input-group > :first-child {
+  border-start-start-radius: var(--radius-sm);
+  border-end-start-radius: var(--radius-sm);
+}
+.input-group > :last-child {
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-muted-foreground);
+}
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--color-destructive);
+  box-shadow: 0 0 0 2px
+    color-mix(in oklab, var(--color-destructive) 18%, transparent);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+input[type="checkbox"][role="switch"] {
+  width: 2.25rem;
+  height: 1.25rem;
+  appearance: none;
+  border: 1px solid var(--color-input);
+  border-radius: 999px;
+  background: var(--color-muted);
+  cursor: pointer;
+  transition-property: background-color, border-color;
+  transition-duration: 140ms;
+}
+input[type="checkbox"][role="switch"]::before {
+  content: "";
+  width: 0.875rem;
+  height: 0.875rem;
+  display: block;
+  margin: 0.125rem;
+  border-radius: 50%;
+  background: var(--color-card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 140ms var(--ease-expo);
+}
+input[type="checkbox"][role="switch"]:checked {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+input[type="checkbox"][role="switch"]:checked::before {
+  transform: translateX(1rem);
+}
+
+.progress,
+progress {
+  width: 100%;
+  height: 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-muted);
+}
+progress::-webkit-progress-bar {
+  background: var(--color-muted);
+}
+progress::-webkit-progress-value {
+  background: var(--color-primary);
+}
+progress::-moz-progress-bar {
+  background: var(--color-primary);
+}
+.skeleton {
+  min-height: 1rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--color-muted),
+    var(--color-accent),
+    var(--color-muted)
+  );
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  to {
+    background-position-x: -200%;
+  }
+}
+
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-muted-foreground);
+  font-size: 0.8125rem;
+}
+.breadcrumb li + li::before {
+  content: "/";
+  margin-inline-end: 0.4rem;
+  color: var(--color-border);
+}
+.avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 0.75rem;
+  min-height: 14rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  text-align: center;
+}
+kbd,
+.kbd {
+  border: 1px solid var(--color-border);
+  border-block-end-width: 2px;
+  border-radius: 0.3rem;
+  padding: 0.08rem 0.35rem;
+  background: var(--color-card);
+  font-family: var(--font-mono);
+  font-size: 0.75em;
+}
+
+.metric,
+[data-number] {
+  font-variant-numeric: tabular-nums;
+}
+/* ── 大数契约 ────────────────────────────────────────────────────
+   数字是衬线大字，单位进 <small>：数字走拉丁字形可以收字距，汉字单位不能。
+   184<small>万条/日</small> 读作一个量，整串放大会让"万条/日"跟数字抢大小。
+   上限 2.75rem 低于首屏 h1，h1 始终是页面最大字。 */
+.stat-num,
+.metric-band .stat-num {
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+/* 它常写成 <p>：浏览器默认 1em 外边距在 44px 字号下是 44px 空隙。
+   :where 让它零优先级，骨架的 main > section > * + * 节奏仍然压得过它 */
+:where(.stat-num) {
+  margin-block: 0;
+}
+.stat-num > strong {
+  font-weight: inherit;
+}
+.stat-num small {
+  font-size: max(0.5em, 0.8125rem); /* 大数被压小时单位不跟着缩到看不清 */
+  font-weight: 500;
+  letter-spacing: 0;
+  margin-inline-start: 0.12em;
+}
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+.fixture-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.fixture-row > .field {
+  flex: 1 1 14rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Document layout, chrome, export-safe typography and print. */
+/* ── 中西配平 ────────────────────────────────────────────────────────
+         思源宋体的笔画比 Georgia 细，同一 font-weight 下并排会显得虚。CSS 没法在一条
+         font-family 栈里给不同字体指定不同字重，于是给中文单起一个家族，用单值字重面
+         把它整体推重一档：请求 400 落到 500，600 落到 600，700 落到 700。
+
+         **单值范围（`500 500`）是必须的**：写成 `500 900` 浏览器会按请求的字重去实例化
+         可变轴，配平当场失效。
+
+         src 全是 `local()` —— 页面不联网，装了哪支用哪支，一支都没有时整个 @font-face
+         被忽略，`--font-serif` 继续往后落到系统宋体。这是渐进增强，不是保证。
+         想调深浅就动这三个数（思源 wght 轴 250~900，一档 50 看得出来）。 */
+@font-face {
+  font-family: "Han Serif Balanced";
+  src:
+    local("Source Han Serif SC VF"), local("Source Han Serif SC"),
+    local("Noto Serif CJK SC"), local("Noto Serif SC");
+  font-weight: 500 500;
+}
+@font-face {
+  font-family: "Han Serif Balanced";
+  src:
+    local("Source Han Serif SC VF"), local("Source Han Serif SC"),
+    local("Noto Serif CJK SC"), local("Noto Serif SC");
+  font-weight: 600 600;
+}
+@font-face {
+  font-family: "Han Serif Balanced";
+  src:
+    local("Source Han Serif SC VF"), local("Source Han Serif SC"),
+    local("Noto Serif CJK SC"), local("Noto Serif SC");
+  font-weight: 700 700;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* sticky 工具条下方留出位置：锚点跳转与 Tab 聚焦时的自动滚动都会参考它，
+     否则向上 Tab 到的元素会被顶到视口顶端、藏在工具条下面 */
+  scroll-padding-top: 5rem;
+}
+/* 运动敏感用户：关掉平滑滚动与所有骨架过渡（页面自己的动效由 interactions.md 管） */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+body {
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+/* 断词交给作者，不交给算法：auto 会在中英混排里断出莫名其妙的位置 */
+main {
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}
+[hidden] {
+  display: none !important;
+}
+/* 版心：工具条内层与内容容器共用同一组几何，左右缘因此始终对齐 */
+.chrome-inner,
+.layout {
+  max-width: var(--page);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+main {
+  padding-block: 2.5rem 6rem;
+}
+/* 版心右侧放得下目录时（body.toc-side，由骨架 JS 按 --page + 目录 + 两侧 gutter 与视口宽度比较后开门）：
+   三列栅格，内容列仍是 --page 宽并居中于视口，目录住在右侧页边。右列保底 --toc-w + --toc-gap；
+   视口不够宽时左列先让，内容只偏移必要的量。断点不能写成媒体查询：@media 不认 var()，页面还会自己改 --page。
+   宽档放不下时 JS 再试窄档（body.toc-compact），两档都放不下就隐藏目录，不挤压正文。
+   只作用于屏幕：打印时目录本来就隐藏，栅格留着会白占一列纸宽。 */
+/* 窄档按 48rem 长文在 1024px 视口、带 17px 常驻滚动条（Windows）时仍放得下来定：768 + 168 + 两侧 gutter ≈ 997px */
+body.toc-compact {
+  --toc-w: 9rem;
+  --toc-gap: 1.5rem;
+}
+@media screen {
+  body.toc-side .chrome-inner,
+  body.toc-side .layout {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, var(--page)) minmax(
+        calc(var(--toc-w) + var(--toc-gap)),
+        1fr
+      );
+    column-gap: 0;
+  }
+  body.toc-side .chrome-title,
+  body.toc-side main {
+    grid-column: 2;
+  }
+  body.toc-side .chrome-actions,
+  body.toc-side .toc {
+    grid-column: 3;
+    padding-inline-start: var(--toc-gap);
+    width: calc(var(--toc-w) + var(--toc-gap));
+  }
+  body.toc-side .chrome-actions {
+    margin-inline-start: 0;
+  }
+}
+main > section {
+  margin-block-start: 3.5rem;
+}
+main > section:first-of-type {
+  margin-block-start: 0;
+}
+
+/* 标题用字号、字形与留白分层，不用堆叠字重。 */
+/* balance：标题不许出现一个字单独占一行。pretty：段末不许留孤字。
+         都是纯排版收尾，不支持的浏览器忽略即可。 */
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+}
+main p,
+main li,
+figcaption,
+blockquote {
+  text-wrap: pretty;
+}
+/* 表格里的数字要能按位对齐，这是表格的本分，不该让每个页面自己加行内样式 */
+.table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 滑块 ────────────────────────────────────────────────────────────
+         **三种选择器一起写，缺一不可。** 组件层同时覆盖 `.field > input[type=range]`
+         和 `.input[type=range]`；页面自造一个 `.knob` 之类的壳把滑块包进去，两个都不命中，
+         滑块就退回操作系统外观 —— macOS 上是一条亮蓝色粗轨道，跟任何调色板都不搭。
+         它不报错，只是难看。所以这里连裸 `input[type=range]` 一起兜住。 */
+input[type="range"],
+.field > input[type="range"],
+.input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 1.25rem; /* 命中区，不是视觉高度；视觉高度在 track 上 */
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track,
+.field > input[type="range"]::-webkit-slider-runnable-track,
+.input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) var(--slider-value, 0%),
+    var(--color-border) var(--slider-value, 0%)
+  );
+}
+input[type="range"]::-webkit-slider-thumb,
+.field > input[type="range"]::-webkit-slider-thumb,
+.input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: -0.25rem; /* (4px − 12px) / 2，把圆点压回轨道中线 */
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+input[type="range"]::-moz-range-track,
+.field > input[type="range"]::-moz-range-track,
+.input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) var(--slider-value, 0%),
+    var(--color-border) var(--slider-value, 0%)
+  );
+}
+input[type="range"]::-moz-range-thumb,
+.field > input[type="range"]::-moz-range-thumb,
+.input[type="range"]::-moz-range-thumb {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+h1 {
+  font-family: var(--font-serif);
+  font-size: 2.125rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+h2 {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.3;
+  margin-block-end: 1.25rem;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+p {
+  line-height: 1.7;
+}
+/* ── 间距节奏：四级 56 / 40 / 20 / 12，层级靠间距读出来，不靠分隔线 ──
+         56 大节之间 · 40 新小节开始 · 20 不同类型的块之间 · 12 同一组内
+         四条规则优先级相同（0,0,3），**顺序即胜负**，不要重排。 */
+main > section > * + * {
+  margin-block-start: 1.25rem; /* 块与块：段落→表格、段落→代码、卡片网格前后 */
+}
+main p + p {
+  margin-block-start: 0.75rem; /* 连续段落属于同一组，比块间距紧 */
+}
+main > section > * + h3 {
+  margin-block-start: 2.5rem; /* 新小节开始。h3 与正文同字号，层级全靠这段空隙 */
+}
+main > section > h3 + * {
+  margin-block-start: 0.75rem; /* 标题与它的第一块内容是一组 */
+}
+/* 自有组件层的 .alert > section 是 grid，其内 p 自带 margin-bottom，
+         与 gap 叠加后会比正文段落还松 —— 容器内不该比容器外松 */
+.alert > section > p {
+  margin-block-end: 0;
+}
+.alert > section > p + p {
+  margin-block-start: 0.5rem;
+}
+/* 行内反色高亮：墨底纸字，换行处每段各自闭合。给标题里的答案词、论点里的关键词；
+         它和暗卡一样花的是强调预算，一个标题里只圈一处。 */
+.hl {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  /* 行内背景取字体的上下伸展区，Newsreader 下伸长、汉字方块偏上：
+     只垫上边不垫下边，汉字才在底色里居中（中英数字混排实测 0.16em）。 */
+  padding: 0.16em 0.35em 0;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+/* ── 报告节律：主栏 + 口径侧栏 ────────────────────────────────────
+         主栏按「编号眉标 → 结论句标题 → 证据 → 来源行」一节一节往下；
+         侧栏放读者随时要查的口径：样本、时间范围、定义、数据来源。
+         侧栏 sticky，900px 以下回到文流；标题加 data-toc-skip 不进目录。 */
+.with-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(13rem, 0.7fr);
+  align-items: start;
+  gap: 2.5rem;
+}
+.with-rail > * {
+  min-width: 0;
+}
+/* 主栏内容不是 section 的直接子元素，间距节奏在这里补一遍 */
+.with-rail > :is(div, aside) > * + * {
+  margin-block-start: 1.25rem;
+}
+.with-rail > :is(div, aside) > * + :is(h2, h3, .eyebrow) {
+  margin-block-start: 3.5rem; /* 新一节开始 */
+}
+.with-rail > :is(div, aside) > .eyebrow + :is(h2, h3) {
+  margin-block-start: 0.5rem;
+}
+.with-rail > :is(div, aside) > :is(h2, h3) + * {
+  margin-block-start: 0.75rem;
+}
+.method-rail {
+  position: sticky;
+  top: 5rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--color-muted-foreground);
+  /* 卡片面色而不是裸文字：口径栏是内容，不能和右侧目录长成两套导航 */
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.375rem;
+}
+.method-rail :is(h2, h3) {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+.method-rail > * + * {
+  margin-block-start: 0.75rem;
+}
+.method-rail > .eyebrow {
+  margin-block-start: 1.75rem;
+}
+.method-rail > .eyebrow:first-child {
+  margin-block-start: 0;
+}
+@media (max-width: 900px) {
+  .with-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .method-rail {
+    position: static;
+  }
+}
+/* 眉标：mono 大写小字。放在 [data-tone] 里会跟着拿分类色 */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tone-ink, var(--color-muted-foreground));
+}
+/* 链接是正文色 + clay 下划线：clay 直接当文字色只有 2.9:1。只管正文，目录与 chrome 不吃这套 */
+main a:not(.btn):not(.item) {
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--hero);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+main a:not(.btn):not(.item):hover {
+  color: var(--link-accent);
+  text-decoration-color: var(--link-accent);
+}
+main a:not(.btn):not(.item):focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+ul,
+ol {
+  padding-inline-start: 1.25rem;
+  line-height: 1.7;
+}
+ul {
+  list-style: disc;
+}
+ol {
+  list-style: decimal;
+}
+li + li {
+  margin-block-start: 0.25rem;
+}
+pre {
+  position: relative; /* 代码工具条的定位锚 */
+  overflow-x: auto; /* 只兜没有 code 子元素的裸 pre */
+  padding: 1rem;
+  border-radius: var(--radius);
+  background: var(--color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+/* 滚动交给 code 而不是 pre：绝对定位的工具条挂在 pre 上，pre 不滚，
+     按钮就不会随代码横向滑走（VitePress / Docusaurus 同一做法，只是它们多包了一层 div）。 */
+pre > code {
+  display: block;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+}
+/* ── 代码工具条：换行 / 复制。骨架 JS 注入，平时隐藏，hover 或键盘焦点进入时出现；
+     无 hover 的触屏设备常显。参考 VitePress / Expressive Code 的做法：按钮压在右上角，不占正文宽度。 */
+pre[data-wrap="on"] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.code-tools {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-expo);
+}
+.code-tools .btn {
+  min-height: 1.625rem;
+  padding: 0.125rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  background: var(--color-card);
+  border-color: var(--color-border);
+  color: var(--color-muted-foreground);
+}
+.code-tools .btn[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-color: var(--color-primary);
+}
+pre:hover .code-tools,
+pre:focus-within .code-tools {
+  opacity: 1;
+}
+@media (hover: none) {
+  .code-tools {
+    opacity: 1;
+  }
+}
+@media print {
+  .code-tools {
+    display: none;
+  }
+}
+/* 语法高亮：class 由 build.py 内联的分词器在运行时发，配色在这里给。
+         运算符（shj-syn-oper）和变量（shj-syn-var）刻意不上色 —— 全上会花。 */
+.shj-syn-cmnt {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.shj-syn-kwd,
+.shj-syn-bool {
+  color: var(--syn-keyword);
+}
+.shj-syn-str,
+.shj-syn-insert {
+  color: var(--syn-string);
+}
+.shj-syn-type,
+.shj-syn-class,
+.shj-syn-func,
+.shj-syn-section {
+  color: var(--syn-type);
+}
+.shj-syn-num {
+  color: var(--syn-number);
+}
+.shj-syn-err,
+.shj-syn-deleted {
+  color: var(--color-destructive);
+}
+/* 行内 code 用 manilla 淡底，卡片（--color-card）里也分得出来 */
+:not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  background: var(--ink-8);
+  padding: 0.125rem 0.375rem;
+  border-radius: calc(var(--radius) - 2px);
+}
+/* ── 公式：作者写 LaTeX，build 编译为 MathML。行内线性、块级堆叠。 ── */
+math {
+  font-family:
+    "Latin Modern Math", "STIX Two Math", "Cambria Math", "Noto Sans Math",
+    math, var(--font-serif);
+}
+math[display="block"],
+math.tml-display {
+  display: block;
+  margin-block: 1.25rem;
+  padding-block: 0.25rem;
+  overflow-x: auto;
+  font-size: 1.125rem;
+}
+/* ── 图（figure）五件套：结论标题 + 单位行 + 图 + 来源 + 论点图注。
+   数据图与示意图共用；图型代码见 assets/gallery/，运行时 assets/charts.js 由 build 内联。
+   卡面靠面色分卡不描边；重播按钮和代码工具条同一套隐藏逻辑。 ── */
+.charts {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+.charts > .fig,
+.charts > .fig.wide {
+  margin: 0;
+}
+.charts > .fig.wide {
+  grid-column: 1 / -1;
+}
+.fig {
+  margin: 2.25rem 0;
+}
+.fig-box {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.25rem 1rem;
+}
+.fig-box > * + * {
+  margin-top: 0.5rem;
+}
+.fig-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+.fig-title {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.fig-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+.fig-id,
+.fig-sub,
+.fig-src,
+.fig-hint,
+.fig-status {
+  font-family: var(--font-mono);
+}
+.fig-id {
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+.fig-sub,
+.fig-hint {
+  font-size: 0.74rem;
+  color: var(--color-muted-foreground);
+}
+/* .src 是脱离 figure 的来源行：表格、指标带、引文下面也要交代来源 */
+.fig-src,
+.src {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+  margin-top: 0.75rem;
+}
+/* 来源行里的标识符保持原样：大写变换会把 PlayerConfig 改成另一个名字；
+   行本身已是 mono 小字，代码片不再加底色和放大 */
+:is(.fig-src, .src) code {
+  font-size: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  background: none;
+  padding: 0;
+}
+/* 汉字没有大小写，0.08em 字距和 10px 字号只会让它更难读 */
+:lang(zh) :is(.fig-src, .src) {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+.fig-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ink-8);
+  font-size: 0.74rem;
+  color: var(--color-muted-foreground);
+}
+.fig-status b {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+.fig-status [data-pin] {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--color-muted-foreground);
+}
+.fig figcaption {
+  margin-top: 0.6rem;
+  padding: 0 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--color-muted-foreground);
+}
+.fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 0.75rem;
+}
+/* 宽窄两版图（diagrams.md「窄屏另画一版」）：横向图在手机宽度下字会缩到读不了时，另画一版纵向的。
+   两版都写在页面里，按视口只显示一版；隐藏的那版是 display:none，读屏和 Tab 都跳过它。
+   !important 用来压过 .fig svg 的 display:block 和页面自己的 display 写法。 */
+.diagram-narrow {
+  display: none !important;
+}
+@media (max-width: 640px) {
+  .diagram-wide {
+    display: none !important;
+  }
+  .diagram-narrow {
+    display: block !important;
+    max-width: 26rem;
+    margin-inline: auto;
+  }
+}
+.fig svg text {
+  font-family: var(--font-mono);
+  user-select: none;
+}
+.fig svg text.name {
+  font-family: var(--font-sans);
+}
+.fig-replay {
+  opacity: 0;
+  transition: opacity 140ms var(--ease-expo);
+}
+.fig:hover .fig-replay,
+.fig:focus-within .fig-replay {
+  opacity: 1;
+}
+@media (hover: none) {
+  .fig-replay {
+    opacity: 1;
+  }
+}
+/* 图内入场动画：pop 缩放、fade 淡入、draw 描线、rise 自底长高、grow 自中轴伸出、blink 实时点 */
+.pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chart-pop 0.5s cubic-bezier(0.2, 0.7, 0.3, 1.3) both;
+}
+@keyframes chart-pop {
+  from {
+    transform: scale(0);
+  }
+}
+.fade {
+  animation: chart-fade 0.9s ease both;
+}
+@keyframes chart-fade {
+  from {
+    opacity: 0;
+  }
+}
+.draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: chart-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes chart-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.rise {
+  animation: chart-rise 0.64s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes chart-rise {
+  from {
+    transform: scaleY(0);
+  }
+}
+.grow {
+  animation: chart-grow 0.7s var(--ease-expo) both;
+}
+@keyframes chart-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.blink {
+  animation: chart-blink 1.2s steps(2, jump-none) infinite;
+}
+@keyframes chart-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.race-row {
+  transition: transform 950ms linear;
+}
+.race-bar {
+  transition:
+    width 950ms linear,
+    fill 950ms linear;
+}
+.race-num {
+  transition: transform 950ms linear;
+}
+.morph-item {
+  transition: transform 1100ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+/* 网络与丝线的聚焦态：hover / focus 一个节点，只留它的邻接 */
+.net-link,
+.net-node,
+.thread,
+.nodelab {
+  transition: opacity 180ms ease;
+}
+svg.focused .net-link:not(.hot) {
+  opacity: 0.06;
+}
+svg.focused .net-node:not(.hot) {
+  opacity: 0.25;
+}
+svg.focused .net-link.hot {
+  opacity: 0.95;
+  stroke: var(--chart-hero);
+}
+svg.focused .thread:not(.hot) {
+  opacity: 0.035;
+}
+svg.focused .thread.hot {
+  opacity: 0.95;
+  stroke: var(--chart-hero);
+}
+svg.focused .nodelab:not(.hot) {
+  opacity: 0.25;
+}
+.net-node,
+.nodelab,
+.hit {
+  cursor: pointer;
+}
+.net-node:focus-visible,
+.force-node:focus-visible {
+  outline: none;
+}
+.net-node:focus-visible > circle,
+.force-node:focus-visible > circle {
+  stroke: var(--chart-hero);
+  stroke-width: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop,
+  .fade,
+  .rise,
+  .grow,
+  .blink {
+    animation: none;
+  }
+  .draw {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .race-row,
+  .race-bar,
+  .race-num,
+  .morph-item {
+    transition: none;
+  }
+}
+@media print {
+  .fig-replay,
+  .fig-status {
+    display: none;
+  }
+  .fig-box {
+    break-inside: avoid;
+  }
+}
+/* 只管正文里的分隔线；组件内部的 hr（.item-group、菜单、按钮组）交给自有组件层 */
+main > section > hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin-block: 2rem;
+}
+blockquote {
+  border-inline-start: 2px solid var(--color-border);
+  padding-inline-start: 1rem;
+  color: var(--color-muted-foreground);
+}
+/* 内容里的长标识符不得撑破栅格 */
+.grid,
+[class*="cols-"] {
+  min-width: 0;
+}
+.grid > *,
+main > * {
+  min-width: 0;
+}
+code,
+.kbd {
+  overflow-wrap: anywhere;
+}
+
+/* 表格里的标识符不在词中断开：anywhere 让 code 的最小宽度只剩一个字符，多列表格里 snake_case 键名和路径会被压成竖条。
+   break-word 不降低最小宽度，列宽由 <wbr> 之间最长的一段决定（作者在 _ 和 / 后插 <wbr>，见 components.md「表格」）；
+   没插 <wbr> 时整个标识符不拆开，放不下由 .table-container 横向滚动 */
+.table code {
+  overflow-wrap: break-word;
+}
+
+/* ── 页眉工具条：背景和 hairline 全宽，内容靠 .chrome-inner 与版心对齐 ── */
+.page-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in oklab, var(--color-background) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-block-end: 1px solid var(--color-border);
+}
+.chrome-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.625rem;
+}
+.page-chrome .chrome-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0; /* 没有这两条，工具条会把整页撑宽 */
+}
+.page-chrome .chrome-actions {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* 选中态用 primary 而不是 accent：accent 在浅色主题下与白底几乎同色，看不出选了哪个 */
+.theme-switch button[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-color: var(--color-primary);
+}
+
+/* ── 右侧目录。结构参考 VitePress outline：hairline 轨道 + 滑动指示条 + 嵌套链接。
+     骨架 JS 扫描 #doc 的 h2/h3 生成条目；条目 ≥2 且版心右侧放得下（body.toc-side）时出现。 ── */
+.toc {
+  display: none;
+}
+@media screen {
+  body.toc-side .toc {
+    display: block;
+  }
+}
+.toc-inner {
+  position: sticky;
+  top: 4.5rem;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+  border-inline-start: 1px solid var(--color-border);
+  padding-inline-start: 1rem;
+}
+.toc-marker {
+  position: absolute;
+  top: 2rem;
+  left: -1px;
+  width: 2px;
+  height: 1.125rem;
+  border-radius: 2px;
+  background: var(--color-primary);
+  opacity: 0;
+  transition:
+    top 0.25s cubic-bezier(0, 1, 0.5, 1),
+    opacity 0.25s;
+}
+.toc-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 2rem;
+}
+.toc-list {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  padding-inline-start: 0;
+  line-height: inherit;
+}
+.toc-list .toc-list {
+  padding-inline-start: 1rem;
+}
+/* h3 小节收在所属 h2 下面，只展开当前节和键盘焦点所在的组（JS 切 .open 与父链接的 aria-expanded）。
+   收起用 visibility:hidden，Tab 不会落到看不见的链接上；Tab 到 h2 链接时这一组先展开，再 Tab 就进得去。
+   展开时 visibility 立即生效，收起时等高度动画结束再隐藏。 */
+.toc-subs {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.25s var(--ease-expo),
+    visibility 0s linear 0.25s;
+}
+.toc-subs.open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition:
+    grid-template-rows 0.25s var(--ease-expo),
+    visibility 0s;
+}
+.toc-subs > .toc-list {
+  min-height: 0;
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toc-subs,
+  .toc-subs.open {
+    transition: none;
+  }
+}
+.toc-list li + li {
+  margin-block-start: 0;
+}
+.toc-link {
+  display: block;
+  line-height: 1.875rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.5s;
+}
+.toc-link:hover,
+.toc-link.active {
+  color: var(--color-foreground);
+  transition: color 0.25s;
+}
+/* 目录内层和收起组都裁切溢出，外扩的焦点环会被切掉一截，收到链接框里面 */
+.toc-link:focus-visible {
+  outline-offset: -2px;
+}
+/* 目录隐藏时的阅读进度：工具条下边线上的一条，不占版面。由骨架 JS 创建并随滚动设 scaleX，
+   没有过渡，减少动态效果时也没有要关的动画。 */
+.read-progress {
+  display: none;
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--color-primary);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+body.has-toc:not(.toc-side) .read-progress {
+  display: block;
+}
+@media (max-width: 640px) {
+  :root {
+    --gutter: 1rem;
+  }
+  main {
+    padding-block-start: 1.75rem;
+  }
+}
+@media print {
+  .page-chrome,
+  .toc {
+    display: none;
+  }
+  /* 打印永远用浅色纸：深色主题的前景 token 是浅色，不重置会变成浅字印白纸 */
+  :root,
+  html.dark,
+  .dark {
+    color-scheme: light;
+    --background: #fff;
+    --foreground: #151b26;
+    --card: #fff;
+    --card-foreground: #151b26;
+    --popover: #fff;
+    --popover-foreground: #151b26;
+    --primary: #174b9b;
+    --primary-foreground: #fff;
+    --secondary: #eef1f5;
+    --secondary-foreground: #151b26;
+    --muted: #f2f3f5;
+    --muted-foreground: #4c5564;
+    --accent: #e9eef7;
+    --accent-foreground: #153b77;
+    --destructive: #9d1d2b;
+    --destructive-foreground: #fff;
+    --border: #aeb4bd;
+    --input: #747d8a;
+    --ring: #174b9b;
+    background: #fff;
+    color: #151b26;
+  }
+  .layout {
+    max-width: none;
+    padding: 0;
+    display: block;
+  }
+  main {
+    padding: 0;
+  }
+  /* 纸质副本能追链接：正文链接后附 href */
+  main a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    word-break: break-all;
+  }
+  /* 无头 Chrome 不读系统纸张设置，不写尺寸就按 Letter 出 PDF */
+  @page {
+    size: A4;
+  }
+  /* 纸上不能横向滚动：代码块打印时自动换行，长行不被裁掉（同屏幕上的「换行」按钮） */
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* 屏幕上 body 至少一屏高；打印时 100vh 加上页边距比一页多一点，不到一页的短页会多出一张空白页 */
+  body {
+    min-height: 0;
+  }
+  /* 标题跟着下文换页，不孤零零留在页底；列表行和卡片不从中间劈开（比一页还高的卡浏览器照常分页） */
+  :is(h2, h3, h4) {
+    break-after: avoid;
+  }
+  .item,
+  .card {
+    break-inside: avoid;
+  }
+  /* 条目组有边框，分页会落在边框内首行之前，页底只剩空框和标题；
+     禁止首行前断，断点退回标题之前 */
+  .item-group > :first-child {
+    break-before: avoid;
+  }
+  /* 打印默认不印背景色（浏览器对话框默认不勾「背景图形」，build.py --pdf 也不打）。
+     这三类底色承载含义，强制保留：diff 增删行（页面自己写的 .d-add / .d-del）、代码块的边界、进度条的数值。
+     其余底色（徽章、提示框、卡片）是装饰，照常省掉 */
+  .d-add,
+  .d-del,
+  pre,
+  progress {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+/* Recipe geometry. Color is shared; the reader's job changes the page shape. */
+body[data-recipe] {
+  --recipe-accent: var(--color-primary);
+}
+body:is(
+  [data-recipe="pr-writeup"],
+  [data-recipe="code-understanding"],
+  [data-recipe="incident-report"],
+  [data-recipe="feature-explainer"],
+  [data-recipe="concept-explainer"]
+) {
+  --page: 48rem;
+}
+body:is(
+  [data-recipe="visual-directions"],
+  [data-recipe="component-variants"],
+  [data-recipe="animation-proto"],
+  [data-recipe="interaction-proto"],
+  [data-recipe="triage-board"],
+  [data-recipe="config-editor"],
+  [data-recipe="text-tuner"]
+) {
+  --page: 72rem;
+}
+body[data-recipe="slide-deck"] {
+  --page: 100%;
+}
+
+body[data-recipe] main > section:first-child > :is(h1, .lede) {
+  max-width: 44rem;
+}
+/* 首屏 h1 取版心宽度的 4.5% ～ 5.5%（lieflat 报告模板 30 ～ 56px 的比例）：
+         48rem → 35 ～ 42px，60rem → 43 ～ 53px。1280px 视口下约 45px，与正文 h1（34px）
+         保持 1.3 倍左右的层级；旧值 6vw / 4.75rem 在长文版心里一行只装 10 个汉字。 */
+body[data-recipe] main > section:first-child > h1 {
+  font-size: clamp(2rem, 3.5vw, 3.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+}
+body[data-recipe] main > section:first-child > .lede {
+  color: var(--color-muted-foreground);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+}
+/* ── 中文标题不用负字距 ─────────────────────────────────────────
+         上面的 -0.01em / -0.035em 与 0.98 行高是给 Newsreader 的拉丁字形收紧的。
+         汉字是满铺 em 框的方块：负字距只会挤字，0.98 行高让多行标题上下相贴。
+         页面 lang 为中文时整体归正 —— 字距略放、行高回到 1.2。同页的纯英文标题
+         也跟着放开，这是有意的取舍：混排里拉丁与汉字的字距没法各调各的。
+         来源：lieflat-charts 报告模板的中西混排规则（中文标题不用负字距）。 */
+:lang(zh) :is(h1, .fig-title) {
+  letter-spacing: 0.01em;
+}
+:lang(zh) body[data-recipe] main > section:first-child > h1 {
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.recipe-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+.recipe-matrix > [data-recipe] {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: var(--color-card);
+}
+.recipe-matrix > [data-recipe] > h2 {
+  margin-block-start: 0;
+  font-size: 1rem;
+}
+.recipe-matrix .recipe-stage {
+  min-height: 9rem;
+  display: grid;
+  gap: 0.625rem;
+  align-content: center;
+  border-block-start: 1px solid var(--color-border);
+  padding-block-start: 0.875rem;
+}
+
+[data-recipe="approach-compare"] .comparison-grid,
+.recipe-matrix > [data-recipe="approach-compare"] .recipe-stage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  align-items: stretch;
+  gap: 1rem;
+}
+[data-recipe="approach-compare"] .recommendation {
+  grid-column: 1 / -1;
+  border-inline-start: 3px solid var(--color-primary);
+  padding-inline-start: 1rem;
+}
+
+[data-recipe="visual-directions"] .artboard-grid,
+.recipe-matrix > [data-recipe="visual-directions"] .recipe-stage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+[data-recipe="visual-directions"] .artboard {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-card);
+  overflow: clip;
+}
+
+[data-recipe="code-review"] .risk-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.5rem;
+}
+[data-recipe="code-review"] .diff-ledger,
+.recipe-matrix > [data-recipe="code-review"] .recipe-stage {
+  border-inline-start: 3px solid var(--color-destructive);
+  padding-inline-start: 1rem;
+}
+
+[data-recipe="pr-writeup"] .file-tour,
+.recipe-matrix > [data-recipe="pr-writeup"] .recipe-stage {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+}
+[data-recipe="pr-writeup"] .file-tour > * {
+  grid-column: 2;
+}
+[data-recipe="pr-writeup"] .file-tour > [data-step]::before {
+  content: attr(data-step);
+  grid-column: 1;
+  font-family: var(--font-mono);
+  color: var(--color-muted-foreground);
+}
+
+[data-recipe="code-understanding"] .execution-layout,
+.recipe-matrix > [data-recipe="code-understanding"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(12rem, 0.7fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+[data-recipe="code-understanding"] .execution-spine {
+  border-inline-start: 1px solid var(--color-border);
+  padding-inline-start: 1.25rem;
+}
+[data-recipe="code-understanding"] .gotcha-rail {
+  position: sticky;
+  top: 5rem;
+}
+
+[data-recipe="design-system-ref"] .specimen-grid,
+.recipe-matrix > [data-recipe="design-system-ref"] .recipe-stage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.75rem;
+}
+[data-recipe="design-system-ref"] .specimen {
+  border-block-start: 2px solid var(--color-foreground);
+  padding-block-start: 0.75rem;
+}
+
+[data-recipe="component-variants"] .prototype-layout,
+.recipe-matrix > [data-recipe="component-variants"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.65fr) minmax(0, 1.6fr);
+  align-items: start;
+  gap: 1rem;
+}
+[data-recipe="component-variants"] .control-rail {
+  position: sticky;
+  top: 5rem;
+  border-block-start: 3px solid var(--color-primary);
+  padding-block-start: 0.75rem;
+}
+
+[data-recipe="animation-proto"] .prototype-stage,
+.recipe-matrix > [data-recipe="animation-proto"] .motion-stage {
+  min-height: min(62dvh, 34rem);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--color-foreground);
+  color: var(--color-background);
+}
+[data-recipe="animation-proto"] .timeline {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--color-border);
+}
+[data-recipe="animation-proto"] .timeline > * {
+  min-width: 0;
+  padding: 0.75rem;
+  background: var(--color-card);
+}
+
+[data-recipe="interaction-proto"] .workbench-layout,
+.recipe-matrix > [data-recipe="interaction-proto"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(14rem, 0.7fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+[data-recipe="interaction-proto"] .workbench {
+  min-height: 24rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+/* 指标带不再只属于 status-report：任何配方的首屏或证据段都用它，页面不要自造 .stat-band */
+.metric-band,
+.recipe-matrix > [data-recipe="status-report"] .metric-band {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0.75rem; /* 面色分格，不画边线；auto-fit 折行后不会留下空格子 */
+}
+.metric-band > * {
+  min-width: 0;
+  padding: 1rem;
+  background: var(--color-card);
+  border-radius: var(--radius);
+}
+.metric-band strong {
+  display: block;
+}
+.metric-band > * > * {
+  margin-block: 0;
+}
+.metric-band > * > * + * {
+  margin-block-start: 0.35rem;
+}
+/* 格内除大数以外的段落是标签或注记：小一号、次要色。写成 .metric-band p 会连大数一起改掉 */
+.metric-band > * > p:not(.stat-num) {
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+}
+
+[data-recipe="incident-report"] .incident-timeline,
+.recipe-matrix > [data-recipe="incident-report"] .timeline {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  padding-inline-start: 1.25rem;
+}
+[data-recipe="incident-report"] .incident-timeline::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0.25rem;
+  width: 1px;
+  background: var(--color-destructive);
+}
+[data-recipe="incident-report"] .incident-timeline > * {
+  position: relative;
+}
+[data-recipe="incident-report"] .incident-timeline > *::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1.25rem;
+  inset-block-start: 0.55rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-destructive);
+}
+
+[data-recipe="implementation-plan"] .plan-layout,
+.recipe-matrix > [data-recipe="implementation-plan"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(13rem, 0.65fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+[data-recipe="implementation-plan"] .milestone-spine {
+  counter-reset: milestone;
+  display: grid;
+  gap: 0;
+}
+[data-recipe="implementation-plan"] .milestone-spine > * {
+  counter-increment: milestone;
+  border-inline-start: 1px solid var(--color-border);
+  padding: 0 0 1.5rem 1.5rem;
+}
+[data-recipe="implementation-plan"] .milestone-spine > *::before {
+  content: counter(milestone, decimal-leading-zero);
+  position: absolute;
+  margin-inline-start: -2.1rem;
+  padding-inline: 0.2rem;
+  background: var(--color-background);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+[data-recipe="slide-deck"] .layout {
+  max-width: none;
+  padding: 0;
+}
+[data-recipe="slide-deck"] main {
+  padding-block: 0;
+}
+[data-recipe="slide-deck"] .slide,
+.recipe-matrix > [data-recipe="slide-deck"] .slide {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  padding: clamp(2rem, 8vw, 8rem);
+  scroll-snap-align: start;
+}
+[data-recipe="slide-deck"] main {
+  scroll-snap-type: y proximity;
+}
+
+/* ── share-card：定尺卡，截图转发用 ─────────────────────────────
+   默认 600×1000（lieflat R11 的社媒竖卡）；页面可在自己的 <style> 里改
+   --sheet-w / --sheet-h。卡内 overflow: clip，内容装不下就是装不下：
+   build.py 的渲染探针会报错，正确做法是删内容或拆第二张卡，不是缩字号。
+   窄视口下骨架 JS 按 transform 等比缩小整张卡，卡内几何一个像素不变。 */
+body[data-recipe="share-card"] {
+  --sheet-w: 600px;
+  --sheet-h: 1000px;
+}
+/* 定尺卡的 chrome 退成桌面：不要全宽横栏和重复的标题，只留右上角一簇悬浮按钮；
+   画布用弱化面色当桌面，卡靠阴影浮在上面。主题切换与复制都还在。 */
+body[data-recipe="share-card"] {
+  background: var(--color-muted);
+}
+[data-recipe="share-card"] .page-chrome {
+  position: fixed;
+  inset: 0.75rem 0.75rem auto auto;
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+}
+[data-recipe="share-card"] .chrome-inner {
+  max-width: none;
+  padding: 0;
+}
+[data-recipe="share-card"] .chrome-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+[data-recipe="share-card"] .chrome-actions {
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-background) 88%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-raised);
+}
+/* 胶囊里的按钮跟着变圆：去描边、去按钮组的拼接边，选中态是一枚实心圆点 */
+[data-recipe="share-card"] .chrome-actions .btn,
+[data-recipe="share-card"] .chrome-actions .button-group > .btn {
+  border-color: transparent;
+  border-radius: 999px;
+  margin-inline-start: 0;
+  background: transparent;
+}
+[data-recipe="share-card"] .chrome-actions .btn:hover {
+  background: var(--color-accent);
+}
+[data-recipe="share-card"]
+  .chrome-actions
+  .theme-switch
+  button[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+[data-recipe="share-card"] main {
+  padding-block: 3.5rem 4rem;
+}
+[data-recipe="share-card"] .sheet-stage {
+  display: flex;
+  justify-content: center;
+  overflow: clip;
+}
+[data-recipe="share-card"] .sheet,
+.recipe-matrix > [data-recipe="share-card"] .sheet {
+  width: var(--sheet-w);
+  height: var(--sheet-h);
+  flex: none;
+  overflow: clip;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1.5rem;
+  padding: 2.25rem;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  box-shadow: var(--shadow-raised);
+  transform-origin: top left;
+}
+.recipe-matrix > [data-recipe="share-card"] .sheet {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 5;
+}
+[data-recipe="share-card"] .sheet > * {
+  min-width: 0;
+  min-height: 0;
+}
+[data-recipe="share-card"] .sheet-mast,
+[data-recipe="share-card"] .sheet-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+[data-recipe="share-card"] .sheet-mast {
+  border-block-end: 1px solid var(--color-foreground);
+  padding-block-end: 0.6rem;
+}
+[data-recipe="share-card"] .sheet-mast strong {
+  color: var(--color-foreground);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.875rem;
+}
+[data-recipe="share-card"] .sheet-body > * + * {
+  margin-block-start: 1.25rem;
+}
+[data-recipe="share-card"] .sheet-body > h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  max-width: none;
+}
+[data-recipe="share-card"] .sheet-body > .lede {
+  font-size: 1rem;
+}
+
+[data-recipe="flowchart"] .diagram-layout,
+.recipe-matrix > [data-recipe="flowchart"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(14rem, 0.7fr);
+  align-items: start;
+  gap: 1rem;
+}
+[data-recipe="flowchart"] .diagram-canvas {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: var(--color-card);
+}
+[data-recipe="flowchart"] .node-detail {
+  position: sticky;
+  top: 5rem;
+  border-block-start: 3px solid var(--color-primary);
+  padding-block-start: 0.75rem;
+}
+.diagram-node {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  background: var(--color-card);
+  color: var(--color-foreground);
+  cursor: pointer;
+}
+.diagram-node[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px
+    color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+
+[data-recipe="svg-illustrations"] .illustration-grid,
+.recipe-matrix > [data-recipe="svg-illustrations"] .recipe-stage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.25rem;
+}
+[data-recipe="svg-illustrations"] figure {
+  margin-inline: 0;
+  border-block-start: 1px solid var(--color-foreground);
+  padding-block-start: 1rem;
+}
+[data-recipe="svg-illustrations"] figure svg {
+  width: 100%;
+  min-height: 14rem;
+  color: var(--color-primary);
+}
+
+[data-recipe="feature-explainer"] .request-path,
+.recipe-matrix > [data-recipe="feature-explainer"] .recipe-stage {
+  counter-reset: request-step;
+  display: grid;
+  gap: 0.75rem;
+}
+[data-recipe="feature-explainer"] .request-path > * {
+  counter-increment: request-step;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+[data-recipe="feature-explainer"] .request-path > *::before {
+  content: counter(request-step);
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+[data-recipe="concept-explainer"] .model-layout,
+.recipe-matrix > [data-recipe="concept-explainer"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(12rem, 0.6fr);
+  align-items: start;
+  gap: 1rem;
+}
+[data-recipe="concept-explainer"] .model-lab {
+  min-width: 0;
+  min-height: 22rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+[data-recipe="concept-explainer"] .model-lab > * {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+[data-recipe="concept-explainer"] .glossary-rail {
+  position: sticky;
+  top: 5rem;
+}
+
+[data-recipe="triage-board"] .board,
+.recipe-matrix > [data-recipe="triage-board"] .recipe-stage {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-block-end: 0.5rem;
+}
+[data-recipe="triage-board"] .lane {
+  min-width: 14rem;
+  border-block-start: 3px solid var(--color-primary);
+  padding-block-start: 0.75rem;
+  scroll-snap-align: start;
+}
+
+[data-recipe="config-editor"] .config-workspace,
+.recipe-matrix > [data-recipe="config-editor"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.75fr);
+  align-items: start;
+  gap: 1rem;
+}
+[data-recipe="config-editor"] .change-rail {
+  position: sticky;
+  top: 5rem;
+  max-height: calc(100dvh - 6rem);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--color-card);
+}
+
+[data-recipe="text-tuner"] .tuner-workspace,
+.recipe-matrix > [data-recipe="text-tuner"] .recipe-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-border);
+  overflow: clip;
+}
+[data-recipe="text-tuner"] .tuner-workspace > * {
+  min-width: 0;
+  min-height: 24rem;
+  padding: 1rem;
+  background: var(--color-card);
+}
+
+@media (max-width: 900px) {
+  [data-recipe="visual-directions"] .artboard-grid,
+  [data-recipe="component-variants"] .prototype-layout,
+  [data-recipe="interaction-proto"] .workbench-layout,
+  [data-recipe="code-understanding"] .execution-layout,
+  [data-recipe="implementation-plan"] .plan-layout,
+  [data-recipe="flowchart"] .diagram-layout,
+  [data-recipe="concept-explainer"] .model-layout,
+  [data-recipe="config-editor"] .config-workspace,
+  [data-recipe="text-tuner"] .tuner-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :is(.gotcha-rail, .control-rail, .node-detail, .glossary-rail, .change-rail) {
+    position: static;
+    max-height: none;
+  }
+  [data-recipe="triage-board"] .board {
+    grid-template-columns: repeat(2, minmax(14rem, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  [data-recipe="visual-directions"] .artboard-grid,
+  .recipe-matrix > [data-recipe="visual-directions"] .recipe-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-recipe="triage-board"] .board {
+    grid-template-columns: repeat(4, minmax(82vw, 1fr));
+  }
+  [data-recipe="slide-deck"] .slide {
+    min-height: auto;
+    padding: 4rem 1rem;
+    scroll-snap-align: none;
+  }
+  [data-recipe="slide-deck"] main {
+    scroll-snap-type: none;
+  }
+}
+
+@media print {
+  [data-recipe="share-card"] .sheet {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+  /* 看板在纸上不能横向滚动：A4 可打印宽约 718px，页面常把列宽写死（三列 16rem 就是 792px），超出的列被裁掉。
+     打印时一律两列均分、换行排，压过页面自己的列宽；卡片整块换页由主打印块的 .card 规则负责 */
+  [data-recipe="triage-board"] .board {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    overflow: visible;
+  }
+  [data-recipe="triage-board"] .lane {
+    min-width: 0;
+  }
+  /* 带边框的配方舞台整块换页：里面的 .fig-box 不可拆，舞台一旦跨页，
+     图整块挪到下一页，上一页只剩一个空边框。舞台比一页还高时浏览器照常分页。 */
+  [data-recipe="visual-directions"] .artboard,
+  [data-recipe="interaction-proto"] .workbench,
+  [data-recipe="flowchart"] .diagram-canvas,
+  [data-recipe="concept-explainer"] .model-lab,
+  [data-recipe="text-tuner"] .tuner-workspace {
+    break-inside: avoid;
+  }
+  [data-recipe="slide-deck"] .slide {
+    min-height: auto;
+    break-after: page;
+  }
+  :is(
+    .gotcha-rail,
+    .control-rail,
+    .node-detail,
+    .glossary-rail,
+    .change-rail,
+    .method-rail
+  ) {
+    position: static;
+    max-height: none;
+  }
+}
+.smh-facts{margin:.5rem 0;padding-left:1.1rem;font-size:.92em}.smh-facts li{margin:.2rem 0}.smh-cause{font-size:.92em;line-height:1.7;opacity:.92;border-left:2px solid currentColor;padding-left:.7rem;margin-top:.6rem}.card code{word-break:break-all}
+</style>
+    <style>
+      :root { --page: 46rem; }
+      
+    </style>
+  <style>
+/* 骨架扩展：两列卡片 / CSS 条形图 / SVG 流程图与趋势图。颜色全部走 CSS 变量 */
+.smh-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-block:1rem}
+@media (max-width:720px){.smh-grid{grid-template-columns:1fr}}
+.smh-k{font-family:var(--font-mono);font-size:.85rem;color:var(--hero-text)}
+.smh-flow,.smh-trend{width:100%;height:auto;display:block}
+.f-node{fill:var(--color-card);stroke:var(--color-border);stroke-width:1.5}
+.f-done{stroke:var(--tone-cactus)}.f-hero{stroke:var(--hero);stroke-width:2.5}.f-par{stroke-dasharray:6 5}
+.f-t{fill:var(--color-foreground);font:600 16px var(--font-sans);text-anchor:middle}
+.f-s{fill:var(--color-muted-foreground);font:13px var(--font-sans);text-anchor:middle}
+.f-line{stroke:var(--hero);stroke-width:2}.f-arrow{fill:var(--hero)}
+.smh-bars{display:grid;gap:.45rem}
+.smh-bars .b{display:grid;grid-template-columns:8.5rem 1fr 3.5rem;align-items:center;gap:.6rem;font-size:.85rem}
+.smh-bars i{display:block;height:.9rem;width:var(--w);background:var(--ink-22);border-radius:3px}
+.smh-bars .mine i{background:var(--ink-60)}.smh-bars .hot i{background:var(--hero)}
+.smh-bars b{font-family:var(--font-mono);font-weight:500;text-align:right}
+@media (max-width:480px){.smh-bars .b{grid-template-columns:6.5rem 1fr 3rem;font-size:.78rem}}
+.t-axis{stroke:var(--color-border)}.t-ev{fill:none;stroke:var(--hero);stroke-width:3}.t-dot{fill:var(--hero)}
+.t-us{fill:none;stroke:var(--ink-45);stroke-width:2;stroke-dasharray:6 5}
+.t-v{fill:var(--color-foreground);font:600 15px var(--font-mono);text-anchor:middle}
+.t-u{fill:var(--color-muted-foreground);font:12px var(--font-sans);text-anchor:middle}
+.t-x{fill:var(--color-muted-foreground);font:12px var(--font-mono);text-anchor:middle}
+details summary{cursor:pointer;margin-block:.75rem}
+</style>
+  </head>
+  <body data-recipe="incident-report">
+    <header class="page-chrome" data-md-skip>
+      <div class="chrome-inner">
+        <span class="chrome-title">Claude Code 团队如何做代码评审 · 2026-10-15</span>
+        <div class="chrome-actions">
+          <button
+            type="button"
+            class="btn"
+            data-variant="outline"
+            data-size="icon-sm"
+            data-copy-md
+            title="复制为 Markdown"
+            aria-label="复制为 Markdown"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-clipboard" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></svg><svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-check" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M20 6 9 17l-5-5" /></svg>
+          </button>
+          <div class="button-group theme-switch" role="group" aria-label="主题">
+            <button
+              type="button"
+              class="btn"
+              data-variant="outline"
+              data-size="icon-sm"
+              data-theme-set="light"
+              title="浅色"
+              aria-label="浅色"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-sun" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" /></svg>
+            </button>
+            <button
+              type="button"
+              class="btn"
+              data-variant="outline"
+              data-size="icon-sm"
+              data-theme-set="system"
+              title="跟随系统"
+              aria-label="跟随系统"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-monitor" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2" />
+      <line x1="8" x2="16" y1="21" y2="21" />
+      <line x1="12" x2="12" y1="17" y2="21" /></svg>
+            </button>
+            <button
+              type="button"
+              class="btn"
+              data-variant="outline"
+              data-size="icon-sm"
+              data-theme-set="dark"
+              title="深色"
+              aria-label="深色"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-moon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <main id="doc">
+<section id="overview">
+<p class="eyebrow">文章解读 · 作者 Addy Osmani、Morgan Westlee Lunt、Qing Wang · claude.dev Blog · 2026-10-15 发布 · 阅读约 14 分钟</p>
+<h1>把「读代码」交给机器，把人的注意力留给风险：PR 翻倍，回滚占比降 40% 以上</h1>
+<p class="lede">Claude 写了 Claude Code 约 90% 的代码。团队没有取消评审，而是把大部分阅读移到机器上，按风险分配人的审批，并重投入「快速发现、快速撤销」。目标是多数 PR 至多一人参与即可合并，同时回滚与事故率不上升。</p>
+<div class="alert"><h4>核心判断：「有没有人读过代码」不是好的代理指标</h4><section><p>该问的是：这个变更可能出什么问题，哪一项检查（自动或人工）最适合拦住它。评审从末端关卡变成「边写边查」的持续过程。</p></section></div>
+<div class="metric-band" aria-label="关键指标"><div><p>6–9 月合并 PR 数</p><p class="stat-num">&gt;2×</p><p>超过翻倍</p></div><div><p>同期需回滚 PR 占比</p><p class="stat-num">−40%+</p><p>下降超过 40%</p></div><div><p>收到实质评审意见的内部 PR 占比</p><p class="stat-num" style="font-size:.72em;white-space:nowrap">16%→54%</p><p>研究预览上线后</p></div><div><p>反复被标记的问题属于旧代码</p><p class="stat-num">59%</p><p>git blame 结果</p></div></div>
+<p class="src">来源：原文。数字均为原文表述，「&gt;2×」「−40%+」为原文「more than doubled」「fell by more than 40 percent」。</p>
+</section>
+<section id="why">
+<h2>为什么必须改：变更量暴涨，人工逐行评审不可行</h2>
+<figure class="fig-box"><div class="fig-head"><span class="fig-title">Anthropic monorepo 每日落地变更数</span><span class="fig-sub">2026 年 5 月 vs 9 月</span></div>
+<div class="smh-bars" role="img"><div class="b "><span>5 月（约）</span><i style="--w:8.3%"></i><b>≈2,500</b></div><div class="b hot"><span>9 月（超过）</span><i style="--w:100%"></i><b>&gt;30,000</b></div></div>
+<p class="src">来源：原文。*推算：30,000 ÷ 2,500 ≈ 12 倍，原文未给出倍数。Claude Code 在独立仓库，压力同样上升。</p></figure>
+<div class="smh-grid">
+<article class="card"><div class="card-content"><p class="smh-k">目标</p><h3>多数 PR 至多一人参与即合并</h3><p>那个人可以就是作者；前提是回滚和事故不增加。覆盖 CLI、桌面/网页端与移动端仓库。</p></div></article>
+<article class="card"><div class="card-content"><p class="smh-k">度量</p><h3>人的时间 + 护栏</h3><p>每 PR 人工批准数（中位数与 P95）、人工评论数、PR 等人的时长；回滚率与事故率作护栏。</p>
+<details><summary>为什么要护栏</summary><p>人的时间包括评审时间和修坏代码的时间。只省下前者、却在后者里花回来，就只是把时间挪了位置。</p></details></div></article>
+</div></section>
+<section id="layers">
+<h2>做法：七层检查叠加，人只看风险处</h2>
+<figure class="fig-box"><div class="fig-head"><span class="fig-title">一个变更的路径</span><span class="fig-sub">原文 FIG B 说「六层检查 + 其下的回滚」，正文分七节；此处按正文七节画</span></div><svg class="smh-flow" viewBox="0 0 760 250" role="img" aria-label="七层检查流程"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" class="f-arrow"/></marker></defs><rect x="10" y="20" width="160" height="64" rx="10" class="f-node f-done"/><text x="90" y="50" class="f-t">01</text><text x="90" y="70" class="f-s">本地验证</text><line x1="170" y1="52" x2="198" y2="52" class="f-line" marker-end="url(#ar)"/><rect x="200" y="20" width="160" height="64" rx="10" class="f-node f-done"/><text x="280" y="50" class="f-t">02</text><text x="280" y="70" class="f-s">AI 评审</text><line x1="360" y1="52" x2="388" y2="52" class="f-line" marker-end="url(#ar)"/><rect x="390" y="20" width="160" height="64" rx="10" class="f-node f-done"/><text x="470" y="50" class="f-t">03</text><text x="470" y="70" class="f-s">安全评审</text><line x1="550" y1="52" x2="578" y2="52" class="f-line" marker-end="url(#ar)"/><rect x="580" y="20" width="160" height="64" rx="10" class="f-node f-done"/><text x="660" y="50" class="f-t">04</text><text x="660" y="70" class="f-s">自动检查</text><rect x="105" y="130" width="160" height="64" rx="10" class="f-node f-hero"/><text x="185" y="160" class="f-t">05</text><text x="185" y="180" class="f-s">分级审批</text><rect x="295" y="130" width="160" height="64" rx="10" class="f-node"/><text x="375" y="160" class="f-t">06</text><text x="375" y="180" class="f-s">合并队列/灰度</text><rect x="485" y="130" width="160" height="64" rx="10" class="f-node"/><text x="565" y="160" class="f-t">07</text><text x="565" y="180" class="f-s">发现与回滚</text><path d="M650,84 L650,105 L185,105 L185,128" class="f-line" fill="none" marker-end="url(#ar)"/><line x1="265" y1="162" x2="293" y2="162" class="f-line" marker-end="url(#ar)"/><line x1="455" y1="162" x2="483" y2="162" class="f-line" marker-end="url(#ar)"/><text x="380" y="235" class="f-s">01–04 为自动化（人看之前完成）· 05 人的注意力按风险投放 · 06–07 兜底</text></svg></figure>
+<div class="smh-grid"><article class="card"><div class="card-content"><p class="smh-k">01</p><h3>作者本地验证</h3><p>给 Claude 可运行的检查（测试/构建/截图），让它展示输出；新上下文子代理复审 diff；提 PR 前跑找 bug、精简 diff、端到端校验等内部 skill。</p><details><summary>细节</summary><p>Boris Cherny 估计「给 Claude 验证手段」能让最终结果好 2–3 倍。同类问题反复被标记时，从源头修：skill、lint 规则，或 CLAUDE.md（项目栈、约定、目标与非目标，保持简短）/ REVIEW.md（由 code owner 写，说明该区域什么算失败、限制 nit 数量、列跳过路径、要求给出文件+行号证据、摘要以计数开头）。</p></details></div></article><article class="card"><div class="card-content"><p class="smh-k">02</p><h3>每个 PR 都有 AI 评审</h3><p>对照整个仓库和 PR 意图读 diff：是否解决问题、是否契合系统、是否破坏别处；修 bug 时找根因。</p><details><summary>细节</summary><p>多个代理并行找 bug，另一组代理对每条发现投票，足够多认可才发布；纯风格/诊断/清理类被丢弃（过滤器经自家 PR A/B 测试）。评论按严重度排序，标 Important / Nit / Pre-existing。每条都要回应：修复或附理由关闭；代理常在夜间接手修复。仓库可设 Quick / Standard / Deep 三档。超过 1,000 行的 PR 大多有发现，小 PR 大多干净。</p></details></div></article><article class="card"><div class="card-content"><p class="smh-k">03</p><h3>可阻断的安全评审</h3><p>bug 评审或安全评审有未关闭发现时 PR 不能合并。</p><details><summary>细节</summary><p>误报通过附简短理由关闭来清除；后续提交修复后发现自动清除。可用开源的 security review GitHub Action 或 /security-review 搭建。</p></details></div></article><article class="card"><div class="card-content"><p class="smh-k">04</p><h3>阻断式自动检查</h3><p>lint、类型检查、全平台测试、构建；典型 CLI PR 在人看之前要跑几十项检查。</p><details><summary>细节</summary><p>PR 模板要求写明如何测试、如何撤销；Claude 可代填，但发起变更的人要签字确认。</p></details></div></article><article class="card"><div class="card-content"><p class="smh-k">05</p><h3>按风险分级的人工审批</h3><p>由变更本身而非作者决定风险档：低风险可零人工，中风险 1 人，高风险 2 人。</p><details><summary>细节</summary><p>一个分类器判定风险档，另一个分类器判断该变更是否仍需额外的人。owner 列为敏感的路径和任何 CI workflow 文件始终需要人。只有仓库可信作者名单上的人能走轻量路径，其余需第二人批准。代理的批准永远不算人的批准。指挥代理的人算作一名必需评审人。批准只对特定 commit 有效，系统无法担保的新提交（代理推送、手工解冲突的合并）需重新批准。</p></details></div></article><article class="card"><div class="card-content"><p class="smh-k">06</p><h3>合并队列、开关与灰度</h3><p>合并队列在应用变更后的 main 上重跑全部检查；新行为先通过 flag 给 Anthropic 员工用。</p><details><summary>细节</summary><p>公开版本先进 latest 渠道，stable 渠道随后跟进。员工的高强度使用常在用户之前暴露回归。</p></details></div></article><article class="card"><div class="card-content"><p class="smh-k">07</p><h3>快速发现、快速回滚</h3><p>flag 无需部署即可关闭；每周 on-call 轮值；事故复查会问「本该由哪一层拦住」。</p><details><summary>细节</summary><p>发现坏合并仍依赖作者、on-call 和回滚/事故看板。尚无在指标变化时自动收紧审批的「熔断」，工程师希望在更多代码走零人工合并之前先有它。</p></details></div></article></div>
+<h3>第 5 层：风险分级（由变更决定，不由作者决定）</h3>
+<div class="table-container"><table class="table"><thead><tr><th>风险</th><th>示例</th><th>必需人工批准</th></tr></thead><tbody><tr><td>低</td><td>文档、文案、仅内部功能、flag 后的增量改动</td><td>0（自动评审与安全检查通过即可）</td></tr><tr><td>中</td><td>普通产品改动；缓存、自动更新器、系统提示词等敏感区域</td><td>1 人</td></tr><tr><td>高</td><td>最高风险代码，以及少数始终要两人的路径</td><td>2 人</td></tr></tbody></table></div>
+</section>
+<section id="results">
+<h2>评审器本身也在迭代：先抓真 bug，再减轮次</h2>
+<figure class="fig-box"><div class="fig-head"><span class="fig-title">收到实质评审意见的内部 PR 占比</span><span class="fig-sub">研究预览上线前后</span></div>
+<div class="smh-bars" role="img"><div class="b "><span>上线前</span><i style="--w:16%"></i><b>16%</b></div><div class="b hot"><span>上线后</span><i style="--w:54%"></i><b>54%</b></div></div><p class="src">来源：原文。</p></figure>
+<div class="alert"><h4>收敛问题：59% 的反复标记来自旧代码</h4><section><p>评审器很少发现新 bug，而是每轮多挖出几个旧的；一个 CLI PR 一夜跑了 50 多轮。现改为同时跟踪 rounds-to-pass 与 recall：</p><ul><li>轮次上限：3 轮后评审者请作者退一步，重新考虑方案</li><li>前几轮之后只复审新增 diff</li><li>标记 bug 的类别，让作者修掉所有实例而不是一行</li><li>不重复已发布过的发现</li></ul></section></div>
+<p class="src">原文 FIG D 显示收敛改动后每个内部 PR 的评审轮次下降，但具体数值在图片中，正文未给出，此处不写数。</p>
+<details><summary>评审器的改进闭环（评测、噪音度量）</summary><ul><li>事故即评测：收集曾导致事故的历史 PR 及其前向修复与回滚，由熟悉代码的工程师确认每个 bug 及位置，评审者每天跑这套集合。</li><li>用人的反应度量噪音：每条评论按「已修复 / 说它错了 / 行为是有意的 / 不重要」归类；另在已知干净的 PR 上跑，统计会诱导有害改动的报告频率。书面优先级：先抓真 bug，其次减少评审轮次。</li><li>作者是代理时噪音更贵：人几秒就能忽略 nit，代理会去修，于是多一次提交、多一轮评审。</li><li>评审必须收敛：一个 CLI PR 一夜之间经历 50 多轮评审与修复，直到作者叫停。</li><li>评审代理还会每晚扫描既有代码，提前发现旧 bug。</li></ul></details>
+</section>
+<section id="humans">
+<h2>人留在哪里：方向、高风险、架构、证据、结果</h2>
+<ul><li>决定要不要做：方向、品味与范围</li><li>评审高风险代码：计费、自动更新器、CI workflow</li><li>评审会被他人效仿的架构模式</li><li>阅读证据：测试输出、运行的命令与结果、截图、评审发现；说不清检查会漏什么，就要求真正的评审</li><li>为结果负责：每个上线的变更都有人负责，无论谁敲的代码</li></ul>
+<details><summary>上下文共享与「谁落地谁负责」</summary>
+<p><strong>共享上下文：</strong>没有正式流程，也没人记得住整个代码库。想了解某一块时让 Claude 针对那一片写说明（几分钟、反映当前代码），有人还让 Claude 做可视化小工件。读一行文案改动几乎学不到东西，读将要修改模块的说明能学到很多。默认在公开 Slack 频道工作也有帮助。</p>
+<p><strong>You land it, you own it：</strong></p><ul><li>变更小，易评审、调试、回滚</li><li>一切可逆：flag、回滚、分阶段发布几分钟内撤销多数错误</li><li>影响范围决定门槛：代价高的代码配更多人和检查</li><li>通过遥测和内部使用快速暴露回归</li><li>不是追责：修复者上下文最多；事故复查看的是系统</li></ul>
+<p><strong>转向：</strong>代理让开工变便宜，有些工作不该落地。频道里有人问「为什么」或给出更简单路线时，作者关闭或重塑 PR；要在线程早期提出，而不是在完成的 PR 上留阻断评论。</p></details>
+</section>
+<section id="adopt">
+<h2>对工程团队的启示：可以照着做的清单</h2>
+<div class="smh-grid"><article class="card"><div class="card-content"><p class="smh-k">提 PR 之前</p><div class="field"><label><input type="checkbox" /> 给代理可运行的检查，写进简短的 CLAUDE.md，再加跑格式化与 linter 的 hooks</label></div><div class="field"><label><input type="checkbox" /> 本地跑 /code-review 和 /security-review，或用新上下文子代理评审</label></div><div class="field"><label><input type="checkbox" /> 加 REVIEW.md，把反复出现的评审意见挪进去</label></div></div></article><article class="card"><div class="card-content"><p class="smh-k">每个 PR</p><div class="field"><label><input type="checkbox" /> 强制 CI，PR 模板加「Testing」「Risk」「How to revert」</label></div><div class="field"><label><input type="checkbox" /> 先在一个仓库加 AI 评审，调几周 REVIEW.md 再推广</label></div><div class="field"><label><input type="checkbox" /> 加自动安全评审，要求所有评审线程解决后才能合并</label></div><div class="field"><label><input type="checkbox" /> 评审力度匹配风险：常规改动快速过，漏 bug 代价高处深度评审</label></div><div class="field"><label><input type="checkbox" /> 限制评审轮次；前几轮后只复审新 diff</label></div></div></article><article class="card"><div class="card-content"><p class="smh-k">审批</p><div class="field"><label><input type="checkbox" /> 写下风险分级，依据变更而非作者；从严开始，有证据再放宽</label></div><div class="field"><label><input type="checkbox" /> 轻量审批路径只给可信作者</label></div><div class="field"><label><input type="checkbox" /> 用 CODEOWNERS 与分支保护，让鉴权、计费、CI/发布流程、安装器始终需要人</label></div><div class="field"><label><input type="checkbox" /> 机器人批准不能替代必需的人工批准；新提交时撤销既有批准</label></div></div></article><article class="card"><div class="card-content"><p class="smh-k">合并与之后</p><div class="field"><label><input type="checkbox" /> 合并队列、feature flag、先内部使用、分阶段发布、一步回滚</label></div><div class="field"><label><input type="checkbox" /> 把事故和回滚做成评测集，评审者的提示词/工具/模型变化时重新打分</label></div><div class="field"><label><input type="checkbox" /> 度量人的时间，以回滚率和事故率作护栏</label></div></div></article></div>
+<p class="src">勾选只在本页生效，不会保存。清单内容来自原文「How you can adopt this process」。</p>
+</section>
+<section id="boundary">
+<h2>边界与未解决项</h2>
+<div class="alert"><h4>原文自己承认的缺口</h4><section><ul><li>尚无根据回滚/事故指标自动收紧审批的熔断机制。</li><li>Code Review 产品只发布发现、不给批准；内部仓库允许 owner 决定哪些低风险变更仅靠自动检查合并，这条线仍在移动。</li><li>「2–3 倍更好」是 Boris Cherny 的估计，不是测量结果。</li></ul></section></div>
+</section>
+<section id="sources">
+<h2>资料来源</h2>
+<ul><li>《How the Claude Code team does code review》，作者 Addy Osmani、Morgan Westlee Lunt、Qing Wang · claude.dev Blog · 2026-10-15 发布 · 阅读约 14 分钟</li><li><code>https://claude.dev/blog/solving-code-review-at-anthropic/</code>（2026-10-31 获取全文）</li></ul>
+</section>
+</main>
+
+      <!-- 右侧目录：骨架 JS 自动生成条目；条目不足 2 个时整块不出现，不要手写 -->
+      <aside class="toc" data-md-skip aria-labelledby="toc-title">
+        <nav class="toc-inner">
+          <div class="toc-marker"></div>
+          <div class="toc-title" id="toc-title" role="heading" aria-level="2">
+            本页目录
+          </div>
+          <ul class="toc-list root"></ul>
+        </nav>
+      </aside>
+    </div>
+
+    <!-- 骨架行为脚本（主题切换、目录、Markdown 导出、代码工具条等）已内联在下方，勿删 -->
+    <!--SHOW-ME:JS:BEGIN--><script data-show-me="hl">window.__SHJ_LANGS={};window.__SHJ_LANGS["bash"]=(function(){var e={type:"var",match:/\$\w+|\${[^}]*}|\$\([^)]*\)/g},t=[{type:"cmnt",sub:"todo",match:/#.*/g},{type:"str",match:/(["'])((?!\1)[^\r\n\\]|\\[^])*\1?/g,sub:[e]},{type:"oper",match:/(?<=\s|^)\.*\/[a-z/_.-]+/gi},{type:"kwd",match:/\s-[a-zA-Z]+|[&|;]+|\b(unset|readonly|shift|export|if|fi|else|elif|while|do|done|for|until|case|esac|break|continue|exit|return|trap|wait|eval|exec|then|declare|enable|local|select|typeset|time|add|remove|install|update|delete)(?=\s|$)/g},{expand:"num"},{type:"func",match:/(?<=(^|\||\&\&|\;)\s*)[a-z_.-]+(?=\s|$)/gmi},{type:"bool",match:/(?<=\s|^)(true|false)(?=\s|$)/g},{type:"oper",match:/[=(){}<>!]+/g},{type:"var",match:/(?<=\s|^)[\w_]+(?=\s*=)/g},e];return t;})();window.__SHJ_LANGS["todo"]=(function(){var t={type:"cmnt",sub:[{type:"err",match:/\b(TODO|FIXME|DEBUG|OPTIMIZE|WARNING|XXX|BUG)\b/g},{type:"class",match:/\bIDEA\b/g},{type:"insert",match:/\b(CHANGED|FIX|CHANGE)\b/g},{type:"oper",match:/\bQUESTION\b/g}]};return t;})();(()=>{var g=(e,n,r)=>()=>{if(r)throw r[0];try{return e&&(n=e(e=0)),n}catch(s){throw r=[s],s}};var y=(e,n)=>()=>{try{return n||e((n={exports:{}}).exports,n),n.exports}catch(r){throw n=0,r}};function*h(e,n,r,s){let c=0;try{let t,l,a={},o,i=[],p=typeof n=="string"?yield n:n,u=[...p.sub??p];for(;c<e.length;){for(a.index=null,t=u.length;t-- >0;){if(l=u[t].expand?b[u[t].expand]:u[t],i[t]===void 0||i[t].match.index<c){if(l.match.lastIndex=c,o=l.match.exec(e),o===null){u.splice(t,1),i.splice(t,1);continue}i[t]={match:o,lastIndex:l.match.lastIndex}}i[t].match[0]&&(i[t].match.index<=a.index||a.index===null)&&(a={part:l,index:i[t].match.index,match:i[t].match[0],end:i[t].lastIndex})}if(a.index===null)break;r(e.slice(c,a.index),p.type),c=a.index,a.part.sub?yield*h(a.match,typeof a.part.sub=="string"?a.part.sub:typeof a.part.sub=="function"?a.part.sub(a.match):a.part,r,a.part.type):r(a.match,a.part.type),c=a.end}r(e.slice(c,e.length),p.type)}catch{r(e.slice(c),s)}}function m(e,n,r,s={}){let c=h(e,n,r),t=c.next();for(;!t.done;)t=c.next(s.languages?.[t.value])}var b,d=g(()=>{b={num:{type:"num",match:/(\.e?|\b)\d(e-|[\d.oxa-fA-F_])*(\.|\b)/g},str:{type:"str",match:/(["'])(\\[^]|(?!\1)[^\r\n\\])*\1?/g},strDouble:{type:"str",match:/"((?!")[^\r\n\\]|\\[^])*"?/g}}});var S=y(()=>{d();var f=window.__SHJ_LANGS||{},v={"&":"&amp;","<":"&lt;",">":"&gt;"};function x(e){return e.replace(/[&<>]/g,function(n){return v[n]})}document.querySelectorAll('pre > code[class*="language-"]').forEach(function(e){var n=e.className.match(/language-([\w+-]+)/);if(n){var r=f[n[1]];if(r){var s="";m(e.textContent,r,function(c,t){s+=t?'<span class="shj-syn-'+t+'">'+x(c)+"</span>":x(c)},{languages:f}),e.innerHTML=s}}})});S();})();
+</script><script data-show-me="shell">/* ── 定尺卡（share-card）：视口比卡窄时整张等比缩小，卡内几何不变 ── */
+(function () {
+  var sheets = document.querySelectorAll(".sheet");
+  if (!sheets.length) return;
+  var fit = function () {
+    sheets.forEach(function (s) {
+      var stage = s.parentElement;
+      s.style.transform = "";
+      stage.style.height = "";
+      var k = Math.min(1, stage.clientWidth / s.offsetWidth);
+      if (k < 1) {
+        s.style.transform = "scale(" + k + ")";
+        stage.style.height = s.offsetHeight * k + "px";
+        stage.style.justifyContent = "flex-start";
+      } else {
+        stage.style.justifyContent = "";
+      }
+    });
+  };
+  fit();
+  addEventListener("resize", fit);
+})();
+/* ── 滑块填充 ──────────────────────────────────────────────────────
+   轨道的已填充部分由 --slider-value 驱动。骨架始终同步这个变量，
+   因而只使用滑块的页面不依赖条件内联的组件行为 JS。 */
+(function () {
+  function sync(el) {
+    var min = Number(el.min || 0),
+      max = Number(el.max === "" ? 100 : el.max);
+    var pct = max === min ? 0 : ((Number(el.value) - min) / (max - min)) * 100;
+    el.style.setProperty("--slider-value", pct + "%");
+  }
+  document.querySelectorAll('input[type="range"]').forEach(sync);
+  /* 事件委托：后插进来的滑块也照样跟着走 */
+  document.addEventListener("input", function (e) {
+    if (e.target.matches && e.target.matches('input[type="range"]'))
+      sync(e.target);
+  });
+})();
+
+/* ── 代码工具条：换行 / 复制 ──
+   给每个 pre > code 注入两个按钮。工具条带 data-md-skip，导出 Markdown 时不出现。
+   复制走 navigator.clipboard，失败时退回 execCommand；反馈先行，不等 promise。 */
+(function () {
+  function mk(label, title) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn";
+    b.setAttribute("data-variant", "outline");
+    b.title = title;
+    b.textContent = label;
+    return b;
+  }
+  function copyText(text) {
+    try {
+      return navigator.clipboard.writeText(text);
+    } catch (e) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch (e2) {}
+      ta.remove();
+    }
+  }
+  document.querySelectorAll("pre > code").forEach(function (code) {
+    var pre = code.parentNode;
+    if (pre.querySelector(".code-tools")) return;
+    var bar = document.createElement("div");
+    bar.className = "code-tools";
+    bar.setAttribute("data-md-skip", "");
+    var wrap = mk("换行", "切换自动换行");
+    wrap.setAttribute("aria-pressed", "false");
+    wrap.addEventListener("click", function () {
+      var on = pre.dataset.wrap !== "on";
+      pre.dataset.wrap = on ? "on" : "off";
+      wrap.setAttribute("aria-pressed", String(on));
+    });
+    var copy = mk("复制", "复制代码");
+    copy.addEventListener("click", function () {
+      copy.textContent = "已复制";
+      setTimeout(function () {
+        copy.textContent = "复制";
+      }, 1600);
+      copyText(code.textContent.replace(/\n$/, ""));
+    });
+    bar.appendChild(wrap);
+    bar.appendChild(copy);
+    pre.appendChild(bar);
+  });
+})();
+
+/* ── 主题三态切换 ── */
+(function () {
+  var root = document.documentElement;
+  var mq = matchMedia("(prefers-color-scheme: dark)");
+  function apply(t) {
+    root.dataset.theme = t;
+    root.classList.toggle(
+      "dark",
+      t === "dark" || (t === "system" && mq.matches)
+    );
+    document.querySelectorAll("[data-theme-set]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.themeSet === t));
+    });
+  }
+  document.querySelectorAll("[data-theme-set]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var t = b.dataset.themeSet;
+      try {
+        t === "system"
+          ? localStorage.removeItem("show-me-theme")
+          : localStorage.setItem("show-me-theme", t);
+      } catch (e) {}
+      apply(t);
+    });
+  });
+  mq.addEventListener("change", function () {
+    if (root.dataset.theme === "system") apply("system");
+  });
+  apply(root.dataset.theme || "system");
+})();
+
+/* ── 复制为 Markdown ──
+遍历 #doc（或 [data-md-root]）生成 GFM。跳过 [data-md-skip] / [hidden] / 脚本 / 弹层。 */
+(function () {
+  var SKIP = new Set([
+    "SCRIPT",
+    "STYLE",
+    "TEMPLATE",
+    "DIALOG",
+    "NOSCRIPT",
+    "SVG",
+    "CANVAS",
+  ]);
+  var INLINE_ONLY = new Set([
+    "A",
+    "CODE",
+    "STRONG",
+    "B",
+    "EM",
+    "I",
+    "DEL",
+    "S",
+    "SPAN",
+    "KBD",
+    "SMALL",
+    "ABBR",
+    "MARK",
+    "SUP",
+    "SUB",
+    "BR",
+    "IMG",
+    "TIME",
+    "MATH",
+    "U",
+    "Q",
+    "LABEL",
+    "OUTPUT",
+  ]);
+  /* 组件容器与目录生成器的排除表保持一致。容器里的标题级别由组件文档固定
+        （卡片头 h3、item / alert 用 h4），和所在节无关；导出时改排到当前节标题的下一级，
+        否则会出现 h2 直跳 h4、工单卡与泳道同为 h3。outline 是最近一个节标题的级别。 */
+  var COMPONENT = ".card, .fig-box, .alert, .item, .accordion, .dialog, .empty";
+  var outline = 1;
+
+  function skipped(el) {
+    return (
+      SKIP.has(el.tagName.toUpperCase()) ||
+      el.hasAttribute("data-md-skip") ||
+      el.hasAttribute("hidden") ||
+      el.getAttribute("aria-hidden") === "true"
+    );
+  }
+  function txt(s) {
+    return (s || "").replace(/\s+/g, " ");
+  }
+
+  function inline(node) {
+    var out = "";
+    node.childNodes.forEach(function (n) {
+      if (n.nodeType === 3) {
+        out += txt(n.nodeValue);
+        return;
+      }
+      if (n.nodeType !== 1 || skipped(n)) return;
+      var t = n.tagName.toUpperCase(),
+        inner = inline(n);
+      if (t === "MATH") {
+        /* 公式导出 LaTeX 源：build 编译时留下的 annotation；没有就退回可读文本 */
+        var ann = n.querySelector('annotation[encoding="application/x-tex"]');
+        var tex = ann ? ann.textContent.trim() : txt(n.textContent).trim();
+        out +=
+          n.getAttribute("display") === "block"
+            ? "\n\n$$" + tex + "$$\n\n"
+            : "$" + tex + "$";
+        return;
+      }
+      if (t === "BR") out += "  \n";
+      else if (t === "IMG")
+        out +=
+          "![" + (n.alt || "") + "](" + (n.getAttribute("src") || "") + ")";
+      else if (
+        t === "CODE" ||
+        t === "KBD" ||
+        n.classList.contains("badge") ||
+        n.classList.contains("kbd")
+      )
+        out += inner.trim() ? "`" + inner.trim() + "`" : "";
+      else if (t === "A") {
+        var href = n.getAttribute("href") || "";
+        out +=
+          href && !href.startsWith("#")
+            ? "[" + inner.trim() + "](" + href + ")"
+            : inner;
+      } else if (t === "STRONG" || t === "B")
+        out += inner.trim() ? "**" + inner.trim() + "**" : "";
+      else if (t === "EM" || t === "I")
+        out += inner.trim() ? "*" + inner.trim() + "*" : "";
+      else if (t === "DEL" || t === "S")
+        out += inner.trim() ? "~~" + inner.trim() + "~~" : "";
+      else out += inner;
+    });
+    return out;
+  }
+
+  function cell(el) {
+    return inline(el).trim().replace(/\|/g, "\\|").replace(/\n/g, " ");
+  }
+
+  function table(el) {
+    var rows = Array.from(el.querySelectorAll("tr")).filter(function (r) {
+      return !skipped(r);
+    });
+    if (!rows.length) return "";
+    /* 没有表头行的表：全部行当数据，列名留空占位 ——
+          否则第一行数据会被当成表头，语义就错了 */
+    var hasTh = !!rows[0].querySelector("th");
+    var head = rows[0],
+      body = hasTh ? rows.slice(1) : rows;
+    var cols = Array.from(head.children).map(function (c, i) {
+      return hasTh ? cell(c) : "列" + (i + 1);
+    });
+    var out =
+      "| " +
+      cols.join(" | ") +
+      " |\n|" +
+      cols
+        .map(function () {
+          return " --- ";
+        })
+        .join("|") +
+      "|\n";
+    body.forEach(function (r) {
+      out += "| " + Array.from(r.children).map(cell).join(" | ") + " |\n";
+    });
+    return out;
+  }
+
+  function list(el, depth) {
+    var ordered = el.tagName === "OL",
+      i = 0,
+      out = "";
+    Array.from(el.children).forEach(function (li) {
+      if (li.tagName !== "LI" || skipped(li)) return;
+      i++;
+      var marker = ordered ? i + ". " : "- ";
+      var pad = "  ".repeat(depth);
+      var sub = "";
+      var own = document.createElement("div");
+      Array.from(li.childNodes).forEach(function (n) {
+        if (n.nodeType === 1 && (n.tagName === "UL" || n.tagName === "OL"))
+          /* 深层嵌套拍平到本级：GFM 对超过 4–5 层的子列表解析不稳，保内容齐整优先 */
+          sub += list(n, depth < 6 ? depth + 1 : depth);
+        else own.appendChild(n.cloneNode(true));
+      });
+      var text = inline(own).trim();
+      if (text) out += pad + marker + text + "\n";
+      out += sub;
+    });
+    return out;
+  }
+
+  function block(el, depth) {
+    var out = "";
+    Array.from(el.children).forEach(function (n) {
+      var t = n.tagName.toUpperCase();
+      if (t === "SVG") {
+        /* 图本身不导出；图里的 <desc> 是写给读屏器的数据摘要，导出成一段文字，复制出去数据不丢。
+           看 svg 自己的 display：宽窄两版图只出正在显示的那版，隐藏标签页里的图照样出
+           （getClientRects 会把后者也丢掉）。和上一段（多半是单位行）相同就不再重复。 */
+        var desc = n.closest("figure") && n.querySelector(":scope > desc");
+        var d = desc ? txt(desc.textContent).trim() : "";
+        if (
+          d &&
+          !out.endsWith(d + "\n\n") &&
+          getComputedStyle(n).display !== "none" &&
+          n.getAttribute("aria-hidden") !== "true" &&
+          !n.hasAttribute("data-md-skip")
+        )
+          out += d + "\n\n";
+        return;
+      }
+      if (skipped(n)) return;
+      if (t === "SUMMARY")
+        return; /* DETAILS 分支已单独输出，这里再走一遍会裸文本重复 */
+      if (/^H[1-6]$/.test(t)) {
+        var lv = +t[1],
+          box = n.closest(COMPONENT),
+          up;
+        if (box) {
+          /* 以最外层组件里最高的标题为下一级，组件内部的相对层级照旧（卡头 h3 + 卡内 h4） */
+          while ((up = box.parentElement.closest(COMPONENT))) box = up;
+          var top = Math.min.apply(
+            null,
+            Array.from(box.querySelectorAll("h1,h2,h3,h4,h5,h6")).map(
+              function (h) {
+                return +h.tagName[1];
+              }
+            )
+          );
+          lv = Math.min(outline + 1 + lv - top, 6);
+        } else outline = lv;
+        out += "\n" + "#".repeat(lv) + " " + inline(n).trim() + "\n\n";
+      } else if (t === "P") {
+        var s = inline(n).trim();
+        if (s) out += s + "\n\n";
+      } else if (t === "UL" || t === "OL") {
+        out += list(n, 0) + "\n";
+      } else if (t === "PRE") {
+        var code = n.querySelector("code");
+        var lang =
+          (code && (code.className.match(/language-([\w+-]+)/) || [])[1]) || "";
+        out +=
+          "```" +
+          lang +
+          "\n" +
+          /* 取 code 的文本而不是 pre 的：pre 里还有骨架注入的工具条 */
+          ((code || n).textContent || "").replace(/\n+$/, "") +
+          "\n```\n\n";
+      } else if (t === "TABLE") {
+        out += table(n) + "\n";
+      } else if (t === "MATH") {
+        var ann2 = n.querySelector('annotation[encoding="application/x-tex"]');
+        out +=
+          "$$" +
+          (ann2 ? ann2.textContent.trim() : txt(n.textContent).trim()) +
+          "$$\n\n";
+      } else if (t === "HR") {
+        out += "---\n\n";
+      } else if (t === "BLOCKQUOTE" || n.classList.contains("alert")) {
+        out +=
+          block(n, depth)
+            .trim()
+            .split("\n")
+            .map(function (l) {
+              return l ? "> " + l : ">";
+            })
+            .join("\n") + "\n\n";
+      } else if (n.classList.contains("tabs")) {
+        /* Markdown 没有标签页：每个标签导出成小标题 + 它的面板，隐藏的面板也要出。 */
+        n.querySelectorAll('[role="tablist"] > [role="tab"]').forEach(
+          function (tab) {
+            out += "**" + inline(tab).trim() + "**\n\n";
+            var panel = document.getElementById(
+              tab.getAttribute("aria-controls")
+            );
+            if (panel) out += block(panel, depth);
+          }
+        );
+      } else if (t === "DETAILS") {
+        var sum = n.querySelector("summary");
+        if (sum) out += "**" + inline(sum).trim() + "**\n\n";
+        out += block(n, depth);
+      } else if (t === "DL") {
+        Array.from(n.children).forEach(function (d) {
+          if (d.tagName === "DT") out += "**" + inline(d).trim() + "** — ";
+          else if (d.tagName === "DD") out += inline(d).trim() + "\n\n";
+        });
+      } else if (
+        n.children.length === 0 ||
+        Array.from(n.children).every(function (c) {
+          return INLINE_ONLY.has(c.tagName);
+        })
+      ) {
+        var s2 = inline(n).trim();
+        if (s2) out += s2 + "\n\n";
+      } else {
+        out += block(n, depth);
+      }
+    });
+    return out;
+  }
+
+  function toMarkdown() {
+    var root =
+      document.querySelector("[data-md-root]") ||
+      document.getElementById("doc") ||
+      document.body;
+    outline = 1;
+    var md = block(root, 0)
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    var title = document.title;
+    /* 正文里只要有一级标题就不再拼 <title>：否则 eyebrow 段落排在 h1 前时，
+          导出会得到两个「# 」（anti-patterns.md #2）。 */
+    var hasH1 = /^# /m.test(md);
+    return (hasH1 ? "" : "# " + title + "\n\n") + md + "\n";
+  }
+
+  /* 暴露给页面用：需要「下载 .md」之类的额外入口时调用它，不要另写一份转换器。 */
+  window.showMeMarkdown = toMarkdown;
+
+  document.querySelectorAll("[data-copy-md]").forEach(function (btn) {
+    var icons = btn.querySelectorAll("svg, i");
+    btn.addEventListener("click", async function () {
+      var md = toMarkdown();
+      /* 反馈先行：剪贴板图标换成对勾 1.6s。不等待 writeText —— 权限 pending 时它可能永不 settle。
+      SVG 没有 hidden 反射属性，必须操作属性本身 */
+      if (icons.length >= 2) {
+        icons[0].setAttribute("hidden", "");
+        icons[1].removeAttribute("hidden");
+      }
+      btn.setAttribute("data-variant", "secondary");
+      setTimeout(function () {
+        if (icons.length >= 2) {
+          icons[0].removeAttribute("hidden");
+          icons[1].setAttribute("hidden", "");
+        }
+        btn.setAttribute("data-variant", "outline");
+      }, 1600);
+      try {
+        await navigator.clipboard.writeText(md);
+      } catch (e) {
+        var ta = document.createElement("textarea");
+        ta.value = md;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+        } catch (e2) {}
+        ta.remove();
+      }
+    });
+  });
+})();
+
+/* ── 右侧目录：扫描 #doc 的 h2/h3 生成条目，指示条随滚动滑动到当前节。
+移植自 VitePress 的 outline：scroll（rAF 节流）+ 标题绝对位置比较。
+标题加 data-toc-skip 可豁免；点击时立即定位指示条，平滑滚动途中不跟跳。
+h3 收在所属 h2 下面，只展开当前节和键盘焦点所在的组。
+目录只在版心右侧放得下时显示；放不下时工具条下边线改为阅读进度。 ── */
+(function () {
+  var doc = document.getElementById("doc");
+  var aside = document.querySelector(".toc");
+  if (!doc || !aside) return;
+  var inner = aside.querySelector(".toc-inner");
+  var list = aside.querySelector(".toc-list");
+  var marker = aside.querySelector(".toc-marker");
+  var headings = Array.from(doc.querySelectorAll("h2, h3")).filter(
+    function (h) {
+      /* 组件容器内的标题不是节标题：卡片头的 h3、折叠面板的标题都不得进目录。
+            否则统计数字写成标题时会产出「7」「91 → 39」这类孤儿条目（anti-patterns.md #1）。 */
+      return (
+        !h.closest("[data-toc-skip]") &&
+        !h.closest("[data-md-skip]") &&
+        !h.closest(
+          ".card, .fig-box, .alert, .item, .accordion, .dialog, .empty"
+        )
+      );
+    }
+  );
+  if (headings.length < 2) return;
+
+  /* h3 嵌进前一个 h2 的子列表；没有前置 h2 的 h3 按顶层处理。
+     子列表外包一层 .toc-subs 做收起动画（grid 行 0fr ↔ 1fr），只给真有 h3 的 h2 建 */
+  var n = 0,
+    group = null,
+    groups = [];
+  headings.forEach(function (h) {
+    if (!h.id) h.id = "toc-" + ++n;
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.className = "toc-link";
+    a.href = "#" + h.id;
+    a.textContent = a.title = h.textContent.trim();
+    li.appendChild(a);
+    if (h.tagName === "H2" || !group) {
+      list.appendChild(li);
+      group = h.tagName === "H2" ? { li: li, link: a, box: null } : null;
+      return;
+    }
+    if (!group.box) {
+      group.box = document.createElement("div");
+      group.box.className = "toc-subs";
+      group.ul = document.createElement("ul");
+      group.ul.className = "toc-list nested";
+      group.box.appendChild(group.ul);
+      group.li.appendChild(group.box);
+      group.link.setAttribute("aria-expanded", "false");
+      groups.push(group);
+    }
+    group.ul.appendChild(li);
+  });
+  document.body.classList.add("has-toc");
+
+  var chrome = document.querySelector(".page-chrome");
+  var bar = null;
+  if (chrome) {
+    bar = document.createElement("div");
+    bar.className = "read-progress";
+    bar.setAttribute("aria-hidden", "true");
+    bar.setAttribute("data-md-skip", "");
+    chrome.appendChild(bar);
+  }
+
+  var side = false,
+    prev = null,
+    skipOnce = false;
+
+  /* 放得下 = 版心 + 目录列 + 两侧 gutter ≤ 视口宽。用一个隐藏探针让浏览器自己算这几个变量：
+     页面可能改写 --page，rem / vw / 100% 都由它换算；--page:100% 时探针宽过视口，目录自然不出 */
+  var probe = document.createElement("div");
+  probe.style.cssText =
+    "position:absolute;visibility:hidden;height:0;" +
+    "width:calc(var(--page) + var(--toc-w) + var(--toc-gap) + 2 * var(--gutter))";
+  function fits(compact) {
+    document.body.classList.toggle("toc-compact", compact);
+    return probe.offsetWidth <= document.documentElement.clientWidth;
+  }
+  function layout() {
+    document.body.appendChild(probe);
+    var on = fits(false) || fits(true);
+    probe.remove();
+    if (!on) document.body.classList.remove("toc-compact");
+    if (on !== side) {
+      side = on;
+      document.body.classList.toggle("toc-side", on);
+    }
+    geom = null;
+  }
+
+  function topOf(el) {
+    var t = 0;
+    while (el !== document.body) {
+      if (el === null)
+        return NaN; /* display:none 的元素拿不到位置，自然被过滤 */
+      t += el.offsetTop;
+      el = el.offsetParent;
+    }
+    return t;
+  }
+
+  function rootItem(el) {
+    while (el && el.parentElement !== list) el = el.parentElement;
+    return el;
+  }
+
+  /* 展开的组 = 当前节所在的组 ∪ 键盘焦点所在的组；.open 与 aria-expanded 同源。
+     只认 :focus-visible：鼠标点过的链接留着焦点，不该在滚走之后还撑开那一组 */
+  function sync() {
+    var f = document.activeElement,
+      kbd = false;
+    if (f && aside.contains(f)) {
+      try {
+        kbd = f.matches(":focus-visible");
+      } catch (e) {
+        kbd = true;
+      }
+    }
+    var cur = rootItem(prev),
+      focused = kbd ? rootItem(f) : null;
+    groups.forEach(function (g) {
+      var open = g.li === cur || g.li === focused;
+      g.box.classList.toggle("open", open);
+      g.link.setAttribute("aria-expanded", String(open));
+    });
+  }
+
+  /* 指示条的参照是 .toc-inner（sticky，自身可滚动）：按两者的视口坐标差算，与嵌套层级无关。
+     animate=false 时不走 top 过渡，用于组展开、收起途中逐帧贴住激活项 */
+  function place(animate) {
+    if (!prev || !side) {
+      marker.style.top = "";
+      marker.style.opacity = "0";
+      return;
+    }
+    var top =
+      prev.getBoundingClientRect().top -
+      inner.getBoundingClientRect().top -
+      inner.clientTop +
+      inner.scrollTop +
+      (prev.offsetHeight - marker.offsetHeight) / 2;
+    if (!animate) marker.style.transition = "none";
+    marker.style.top = top + "px";
+    marker.style.opacity = "1";
+    if (!animate) {
+      void marker.offsetTop; /* 先让无过渡的位置生效，再恢复过渡 */
+      marker.style.transition = "";
+    }
+  }
+
+  function activate(hash) {
+    if (prev) prev.classList.remove("active");
+    prev = null;
+    if (hash) {
+      var links = list.querySelectorAll("a");
+      for (var i = 0; i < links.length; i++) {
+        if (links[i].getAttribute("href") === hash) {
+          prev = links[i];
+          break;
+        }
+      }
+    }
+    if (prev) prev.classList.add("active");
+    sync();
+    place(true);
+  }
+
+  /* 组的高度在动画里逐帧变化：每帧（布局之后、绘制之前）把指示条贴回激活项 */
+  if (window.ResizeObserver && groups.length) {
+    var ro = new ResizeObserver(function () {
+      place(false);
+    });
+    groups.forEach(function (g) {
+      ro.observe(g.box);
+    });
+  }
+
+  var geom =
+    null; /* 缓存的标题几何：resize 后失效，滚动时不再逐个读 offsetTop */
+  function measure() {
+    /* 判定线 = 锚点跳转后标题停下的位置：html 的 scroll-padding-top（让出 sticky 工具条）加标题自己的
+       scroll-margin-top。只算后者时，点目录跳过去的那一节停在线下，激活的会是上一节 */
+    var pad =
+      parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) ||
+      0;
+    geom = headings
+      .map(function (h) {
+        return {
+          id: h.id,
+          top: topOf(h),
+          sm: pad + (parseFloat(getComputedStyle(h).scrollMarginTop) || 0),
+        };
+      })
+      .filter(function (x) {
+        return !isNaN(x.top);
+      })
+      .sort(function (a, b) {
+        return a.top - b.top;
+      });
+  }
+
+  function setActive() {
+    if (!side) return;
+    if (skipOnce) {
+      skipOnce = false;
+      return;
+    }
+    if (!geom) measure();
+    var items = geom;
+    if (!items.length) return activate(null);
+    if (scrollY < 1) return activate(null); /* 页顶：无激活项 */
+    if (
+      Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight
+    )
+      return activate(
+        "#" + items[items.length - 1].id
+      ); /* 页底：激活最后一项 */
+    var active = null;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].top > scrollY + items[i].sm + 4) break;
+      active = items[i].id;
+    }
+    activate(active ? "#" + active : null);
+  }
+
+  /* 阅读进度：读到 #doc 底边算 100%，直接赋值、不带过渡 */
+  function progress() {
+    if (side || !bar) return;
+    var end = doc.getBoundingClientRect().bottom + scrollY - innerHeight;
+    var t = end > 0 ? Math.min(1, Math.max(0, scrollY / end)) : 1;
+    bar.style.transform = "scaleX(" + t + ")";
+  }
+
+  function update() {
+    setActive();
+    progress();
+  }
+
+  aside.addEventListener("click", function (e) {
+    var a = e.target instanceof Element ? e.target.closest("a") : null;
+    if (a && a.hash) {
+      skipOnce = true;
+      activate(a.hash);
+    }
+  });
+  aside.addEventListener("focusin", sync);
+  aside.addEventListener("focusout", function () {
+    setTimeout(sync, 0); /* focusout 时焦点还没落到下一个元素上 */
+  });
+  var ticking = false;
+  addEventListener(
+    "scroll",
+    function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        update();
+      });
+    },
+    { passive: true }
+  );
+  addEventListener("resize", function () {
+    layout();
+    update();
+    place(false);
+  });
+  addEventListener("load", function () {
+    /* 等浏览器恢复滚动位置后再定位一次 */
+    layout();
+    update();
+  });
+  layout();
+  update();
+})();
+</script><!--SHOW-ME:JS:END-->
+  </body>
+</html>

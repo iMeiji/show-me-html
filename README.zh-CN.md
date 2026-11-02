@@ -39,14 +39,61 @@
 |---|---|
 | ![亮色预览](docs/images/preview-light.jpg) | ![暗色预览](docs/images/preview-dark.jpg) |
 
-想看底板本身？直接用浏览器打开 [`assets/skeleton.html`](assets/skeleton.html)。
+<details>
+<summary><b>点击展开整页预览</b></summary>
+
+<p align="center">
+  <img src="docs/images/preview-full-light.jpg" width="49%" alt="整页预览（亮色）" />
+  <img src="docs/images/preview-full-dark.jpg" width="49%" alt="整页预览（暗色）" />
+</p>
+
+</details>
+
+想看底板本身？直接用浏览器打开 [`assets/skeleton.html`](assets/skeleton.html)。成品效果见 [`assets/example-claude-code-review.html`](assets/example-claude-code-review.html)，是一份解读 Claude Code 团队代码评审做法的示例报告，上面的截图就取自它。
 
 ## 📦 安装
+
+### 推荐：`npx skills`
+
+用 [vercel-labs/skills](https://github.com/vercel-labs/skills) 命令行工具安装（需要 Node.js 22.20+）：
+
+```bash
+npx skills add iMeiji/show-me-html        # 装到当前项目
+npx skills add iMeiji/show-me-html -g     # 全局安装
+```
+
+用 `-a` / `--agent` 指定要装给哪个 agent，装给多个就重复写：
+
+```bash
+npx skills add iMeiji/show-me-html -a claude-code            # 只装给 Claude Code
+npx skills add iMeiji/show-me-html -a codex                  # 只装给 Codex
+npx skills add iMeiji/show-me-html -a claude-code -a codex   # 同时装给多个
+npx skills add iMeiji/show-me-html -g -a claude-code -y      # 全局安装 + 跳过确认
+npx skills add iMeiji/show-me-html --agent '*'               # 装给所有支持的 agent
+```
+
+不写 `-a` 时，工具会检测本机已安装的 agent，让你勾选。常用 agent 名称：
+
+| Agent | `--agent` | 全局路径（`-g`） |
+|-------|-----------|------------------|
+| Claude Code | `claude-code` | `~/.claude/skills/` |
+| Codex | `codex` | `~/.agents/skills/` |
+| Cursor | `cursor` | `~/.cursor/skills/` |
+| Gemini CLI | `gemini-cli` | `~/.gemini/skills/` |
+| GitHub Copilot | `github-copilot` | `~/.copilot/skills/` |
+| OpenCode | `opencode` | `~/.config/opencode/skills/` |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/skills/` |
+
+完整列表见[支持的 agent](https://github.com/vercel-labs/skills/blob/main/docs/agents.md)。默认只保留一份文件，再用软链接分发到各 agent 目录；加 `--copy` 则改为复制。
+
+之后可用 `npx skills list`、`npx skills update`、`npx skills remove` 管理。该工具会收集匿名使用数据，设置 `DISABLE_TELEMETRY=1` 即可关闭。
+
+### 备选：手动安装
 
 把整个目录复制到 skills 目录：
 
 ```bash
-git clone https://github.com/<your-name>/show-me-html.git
+git clone https://github.com/iMeiji/show-me-html.git
 mkdir -p ~/.agents/skills
 cp -R show-me-html ~/.agents/skills/show-me-html
 ```
@@ -79,7 +126,8 @@ cp -R show-me-html ~/.agents/skills/show-me-html
 show-me-html/
 ├── SKILL.md                    # Skill 入口：规则、流程、中文本地补充说明
 ├── assets/
-│   └── skeleton.html           # 视觉底板：CSS，主题 / 目录 / 排序 / 复制脚本
+│   ├── skeleton.html           # 视觉底板：CSS，主题 / 目录 / 排序 / 复制脚本
+│   └── example-claude-code-review.html  # 示例成品（不是模板）
 ├── references/                 # 与上游一致，未修改
 │   ├── interactive-tools.md
 │   ├── interface-quality.md
