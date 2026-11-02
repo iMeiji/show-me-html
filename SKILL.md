@@ -1,0 +1,103 @@
+---
+name: show-me-html
+description: Create self-contained HTML artifacts when a request benefits from spatial layout, visual hierarchy, diagrams, formulas, data charts, evidence, interaction, presentation, or an exportable one-off tool. Use for non-trivial docs, writeups, plans, specs, reports, explainers, summaries, comparisons, reviews, PR descriptions, mockups, diagrams, flowcharts, decks, slides, status updates, incident reports, research, quantitative analysis, playgrounds, editors, and tools. Stay in markdown for short chat replies, code-only answers, terminal-style instructions, and disposable summaries that are only a few bullets.
+---
+
+
+# Show Me HTML
+
+Use this skill when HTML will make the shape of the work clearer than markdown. The goal is not "always output HTML"; the goal is to choose HTML when layout, hierarchy, color, motion, diagrams, or interaction materially improve understanding or action.
+
+Treat source documents as raw material, not as the target structure. Preserve meaning, facts, evidence, formulas, and user intent, but redesign the presentation when another structure would make the content easier to understand.
+
+## Decide the medium
+
+Reach for a self-contained `.html` artifact when any of these are true:
+
+- **Comparison:** two or more options must be weighed side by side.
+- **Spatial structure:** timelines, diffs, maps, flows, states, before/after, architecture, or call graphs carry meaning.
+- **Interaction:** the reader needs to tune, filter, drag, simulate, preview, or feel motion.
+- **Reference use:** the result will be navigated non-linearly with tabs, anchors, panels, glossary, or filters.
+- **Visual hierarchy:** status, severity, ownership, metrics, code, or design tokens need color and structured layout.
+- **Quantitative reasoning:** formulas, statistical claims, charts, plots, or tables must be explained and inspected.
+- **Evidence:** claims, research, sources, logs, code references, or data provenance must be distinguishable.
+- **Round trip:** the reader needs to manipulate data and export the result back to markdown, JSON, prompt text, config, or CSV.
+- **Sharing:** the artifact is meant to be read carefully, presented, reviewed, or sent to others.
+- **Length:** the answer would become a long linear document.
+
+Stay in markdown for short conversational answers, code snippets, command sequences, small checklists, and files intended to be hand-edited or diffed repeatedly.
+
+## Artifact brief
+
+Before building, silently lock this brief:
+
+- Purpose: what job should the artifact do?
+- Audience: who will read or use it, and how much context do they have?
+- Content shape: comparison, timeline, report, review, diagram, deck, editor, prototype, or hybrid.
+- Representation strategy: what should move from linear text into comparison, timeline, diagram, map, cards, dashboard, glossary, deck, simulator, or tool?
+- Visual direction: the deliberate tone and one memorable design idea.
+- Interactions: what state changes, if any, must the reader control?
+- Chart strategy: for quantitative artifacts, whether ECharts is needed; if not, why a smaller SVG/CSS/table treatment is enough.
+- Export path: for any editor/tool, what output format closes the loop?
+- Constraints: offline use, privacy, screen size, accessibility, performance, and user-provided style.
+
+## Universal rules
+
+Every HTML artifact must:
+
+1. Be a single self-contained `.html` file unless the user explicitly asks otherwise.
+2. Work offline by default: inline CSS and JS; no required runtime server; avoid external assets unless the user provided them or they are clearly optional.
+3. Use real layout, not markdown wrapped in tags. Render comparisons as columns, flows as diagrams, timelines as timelines, diffs as diffs.
+4. Do not mirror the source document's heading order unless the user asks for faithful conversion. If the HTML outline looks like the markdown outline with styling, rethink the artifact shape.
+5. Be readable within five seconds: title, short framing sentence, and clear primary structure above the fold.
+6. Use semantic HTML first: `main`, `section`, `article`, `nav`, `table`, `button`, `a`, `label`, and ordered headings before ARIA patches.
+7. Be responsive from phone to desktop with stable dimensions for fixed-format UI like boards, grids, slide canvases, charts, controls, and toolbars.
+8. Be keyboard usable: visible `:focus-visible`, sensible tab order, real buttons for actions, real links for navigation.
+9. Respect motion and comfort: honor `prefers-reduced-motion`, animate only purposeful moments, and avoid `transition: all`.
+10. Handle real content: long text, empty states, narrow screens, large numbers, loading, errors, and destructive actions.
+11. Export state for every interactive editor/tool. Without export, an editor is incomplete.
+12. For factual or evidence-heavy artifacts, keep source notes close to important claims, distinguish fact from inference when it matters, and surface conflicting, stale, skipped, or uncertain data.
+13. For data-heavy artifacts with benchmarks, multiple metrics, trend lines, rates, or comparison charts, default to ECharts per `math-and-data.md`. If using inline SVG/CSS/tables instead, state the reason in the final note and keep the underlying data inspectable.
+
+## Reference selection
+
+Read only the references needed for the task:
+
+- `references/patterns.md`: comparisons, plans, reviews, reports, explainers, diagrams, decks, and other artifact shapes.
+- `references/visual-direction.md`: typography, color, composition, motion, background detail, and avoiding generic generated aesthetics.
+- `references/interface-quality.md`: accessibility, focus, forms, animation, content handling, performance, dark mode, locale, and interaction checks.
+- `references/interactive-tools.md`: one-off editors, tuners, triage boards, state, persistence, reset, export, and failure states.
+- `references/math-and-data.md`: formulas, equations, derivations, statistics, metrics, charts, plots, tables, and quantitative explainers.
+
+If the request includes frontend design, UI polish, mockups, prototypes, visual exploration, or public-facing presentation, read `visual-direction.md`.
+
+If the artifact contains any interaction, forms, navigation, custom controls, generated images, animation, or dense responsive layout, read `interface-quality.md`.
+
+If the user will manipulate state or data, read `interactive-tools.md` before designing the controls.
+
+If the artifact includes formulas, equations, statistical claims, charts, plots, tables, metrics, or quantitative reasoning, read `math-and-data.md`.
+
+## Build workflow
+
+1. Run a representation pass: identify the reader's job, content atoms, relationships, decisions, evidence, caveats, and latent visuals.
+2. Choose the artifact shape and visual direction from the representation pass, not from the source document order.
+3. For quantitative artifacts, decide the chart strategy before implementation: ECharts by default for substantive data visualization; SVG/CSS/table only when the chart is genuinely tiny or a table is clearer.
+4. Sketch the layout around the content's structure, not around generic cards.
+5. Implement the full single-file HTML with inline CSS and JS.
+6. Add interactions only when they help the user understand, decide, or export.
+7. Run a self-review against `interface-quality.md`.
+8. Deliver the saved path or artifact, plus a concise note on what it contains and any deliberate chart-library deviations.
+
+Bad-looking HTML is worse than good markdown. If the result looks like a generic template, restart the visual direction before shipping.
+
+## 本地补充说明
+
+基于 hi-zhenyu 的 [show-me-html](https://github.com/hi-zhenyu/show-me-html)（MIT）。上面的流程和规则保持原版不变，下面只是在其上追加的约定。
+
+- **默认视觉底板。** 以 `assets/skeleton.html` 为底，使用它的 CSS、亮/暗/跟随系统三态主题脚本和自动目录脚本。只替换 `<main id="doc">` 里的内容、`<title>` 和 `.chrome-title`。页面结构仍按 artifact brief 和内容来定，不套固定模板。只有用户要求别的风格时才不带底板。
+- **自包含。** 不引用 Google Fonts 或 CDN，字体用底板里定义的系统字体栈（`--font-serif`、`--font-sans`、`--font-mono`）。图表可以用内联 SVG/CSS，并按第 13 条在最终说明里写明理由。
+- **不编造数据。** 缺失的值写 `[DATA NEEDED: ...]`。自己算出的数字要标注算法，并说明原文没有这个数。
+- **细节默认收起。** 结论、关键数字和行动项保持可见；原因链、证据明细、日志和原始数据放进 `<details>`，默认收起。
+- **脱敏。** 去掉内部主机名、绝对路径、人名、令牌和内网链接，除非用户要求保留。
+- **可排序表格。** 底板自带原生可排序表格脚本（无外部依赖）：给 `<table>` 加 `class="sortable"` 即可点击表头升/降序，数字（含逗号、%、×、“约”等）按数值排序，中文按 localeCompare。
+- **截图自检。** 复制一份页面，把主题脚本里的 `localStorage.getItem("show-me-theme")` 替换成 `"dark"` 或 `"light"`，再运行 `google-chrome --headless=new --window-size=1440,4000 --screenshot=out.png file:///path.html`。
