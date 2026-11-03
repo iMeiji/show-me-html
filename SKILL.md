@@ -95,6 +95,9 @@ Bad-looking HTML is worse than good markdown. If the result looks like a generic
 基于 hi-zhenyu 的 [show-me-html](https://github.com/hi-zhenyu/show-me-html)（MIT）。上面的流程和规则保持原版不变，下面只是在其上追加的约定。
 
 - **默认视觉底板。** 以 `assets/skeleton.html` 为底，使用它的 CSS、亮/暗/跟随系统三态主题脚本和自动目录脚本。只替换 `<main id="doc">` 里的内容、`<title>` 和 `.chrome-title`。页面结构仍按 artifact brief 和内容来定，不套固定模板。只有用户要求别的风格时才不带底板。
+- **不要覆盖底板的版心和配色。** 页面自己的 `<style>` 只写内容组件（卡片、流程、列表等）的样式，不要改 `html`、`body`、`.layout`、`main#doc`、`.page-chrome`、`.chrome-inner` 的背景、边框和左右内边距（例如 `background:transparent`、`padding-inline:0`）；亮色背景和页边距由底板的 `--paper` 与 `--gutter` 决定，页面不另做"嵌入模式"。
+- **别破坏折叠块的内边距。** 底板的 `<details>` 是带背景和边框的卡片，内边距靠 `summary` 的 padding 和子元素的 `margin-inline` 实现。页面里不要给 `summary` 写 `padding:..0`，也不要用 `margin:12px 0` 这类简写去改折叠块里的元素（会清掉左右空白），改上下间距请写 `margin-block`。
+- **收尾自检。** 交付前用 390px 宽度截一张手机图，确认正文左右都有边距、折叠块展开后文字不贴边、亮色背景是底板的暖灰纸色。
 - **自包含。** 不引用 Google Fonts 或 CDN，字体用底板里定义的系统字体栈（`--font-serif`、`--font-sans`、`--font-mono`）。图表可以用内联 SVG/CSS，并按第 13 条在最终说明里写明理由。
 - **不编造数据。** 缺失的值写 `[DATA NEEDED: ...]`。自己算出的数字要标注算法，并说明原文没有这个数。
 - **细节默认收起。** 结论、关键数字和行动项保持可见；原因链、证据明细、日志和原始数据放进 `<details>`，默认收起。
