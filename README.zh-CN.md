@@ -16,7 +16,7 @@
 
 ---
 
-`show-me-html` 基于 [hi-zhenyu/show-me-html](https://github.com/hi-zhenyu/show-me-html)，保留原版的规则和参考文档，并加入一套开箱即用的视觉底板 `assets/skeleton.html`，让每次生成的页面风格统一、便于分享，且没有任何外部依赖。
+`show-me-html` 基于 [hi-zhenyu/show-me-html](https://github.com/hi-zhenyu/show-me-html)，保留原版的规则和参考文档，并加入一套开箱即用的视觉底板 `assets/skeleton.html`，让每次生成的页面风格统一、便于分享，除可选的异步网络字体外没有外部依赖。
 
 ## ✨ 功能亮点
 
@@ -29,7 +29,7 @@
 | 📋 | **复制为 Markdown** | 一键把页面内容导出为 Markdown 到剪贴板。 |
 | 🧩 | **代码块工具条** | 每个 `pre > code` 自带换行、复制按钮。 |
 | 🔽 | **细节默认收起** | 结论和关键数字保持可见；原因链、证据、日志放进默认收起的 `<details>`。 |
-| 🔤 | **系统字体栈** | 不用 Google Fonts、不走 CDN，`--font-serif`、`--font-sans`、`--font-mono` 都用读者本机字体。 |
+| 🔤 | **异步网络字体，离线回退** | 异步加载 Google Fonts（IBM Plex、Newsreader、Noto Serif SC），不阻塞首屏；离线时 `--font-serif`、`--font-sans`、`--font-mono` 回退到本机系统字体。 |
 
 ## 🖼️ 效果预览
 
@@ -145,8 +145,8 @@ show-me-html/
 
 基于 Zhenyu Huang 的 **[hi-zhenyu/show-me-html](https://github.com/hi-zhenyu/show-me-html)**（MIT）。本项目的改动：
 
-- `SKILL.md`：原版正文原样保留，改了 `name`，末尾追加简短的中文「本地补充说明」（默认视觉底板、离线字体、不编造数据、细节默认收起、脱敏、可排序表格、截图自检）。
-- 新增 `assets/skeleton.html`：视觉系统 CSS 和 shell 脚本取自 show-me-html 生成的页面，Google Fonts 换成系统字体栈，并加入原生可排序表格脚本。
+- `SKILL.md`：原版正文原样保留，改了 `name`，末尾追加简短的中文「本地补充说明」（默认视觉底板、异步网络字体与离线回退、不编造数据、细节默认收起、脱敏、可排序表格、截图自检）。
+- 新增 `assets/skeleton.html`：视觉系统 CSS 和 shell 脚本取自 show-me-html 生成的页面，保留 Google Fonts 异步加载、以系统字体栈作离线回退，并加入原生可排序表格脚本。
 - `references/`：未修改。
 
 详见 [NOTICE](NOTICE)。

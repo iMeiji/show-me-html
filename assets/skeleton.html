@@ -4,7 +4,22 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>[报告标题｜一句话结论]</title>
-    
+    <!-- 网络字体：异步加载（media="print"，onload 后换成 all），不阻塞首屏；
+         无 JS 时由 <noscript> 兜底。离线或被拦截时自动回退到下方 --font-serif /
+         --font-sans / --font-mono 的系统字体栈（字体栈未改动，别删短）。 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap"
+    />
+    <noscript
+      ><link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap"
+    /></noscript>
     <script>
       /* 主题：在首次绘制前决定，避免闪烁。三态 light / dark / system。 */
       (function () {

@@ -36,6 +36,7 @@ Bold and minimal are both valid. The failure mode is not restraint; the failure 
 - Let the content shape determine the layout: columns for comparisons, lanes for workflows, canvases for diagrams, full-viewport sections for decks.
 - Use asymmetry, overlap, grids, side notes, sticky summaries, and responsive panels when they clarify the reading path.
 - Do not nest cards inside cards.
+- 报告类页面（调研、事故、说明文）正文可收窄：在页面 `<style>` 里写 `:root{--page:46rem}`；表格多、列宽的页面保持默认宽度，不要收窄。
 - Do not build a landing page when the user asked for a tool, report, comparison, or artifact. Put the usable work first.
 - Give fixed-format elements stable dimensions with `aspect-ratio`, grid tracks, min/max sizes, or container constraints.
 - Ensure all text fits inside buttons, tabs, labels, and cards at mobile and desktop widths.

@@ -2,11 +2,11 @@ show-me-html
 基于 hi-zhenyu/show-me-html（https://github.com/hi-zhenyu/show-me-html）
 Copyright (c) 2026 Zhenyu Huang，MIT License（全文见 LICENSE）。
 
-references/ 下的 interactive-tools.md、interface-quality.md、math-and-data.md、patterns.md、visual-direction.md 为原版文件，未做修改。
+references/ 下的 interactive-tools.md、interface-quality.md、math-and-data.md 为原版文件，未做修改；patterns.md 新增了报告类写法（首屏、来源行、证据卡、条形图、改进清单），visual-direction.md 新增了窄版正文说明，其余内容保持原版。
 assets/skeleton.html 中的视觉系统 CSS、主题脚本和 shell 脚本取自 show-me-html 生成的页面。
 
 主要改动：
-- 去掉 Google Fonts，改用系统中文字体栈
+- 保留 Google Fonts 异步加载，以系统中文字体栈作离线回退
 - 新增默认使用的视觉底板 assets/skeleton.html（样式与脚本，非固定内容模板）
 
 SKILL.md：原版正文原样保留，仅改了 name 和 description，末尾追加中文「本地补充说明」。新增文件：assets/skeleton.html、README.md。
