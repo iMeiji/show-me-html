@@ -117,6 +117,7 @@ Just ask for an HTML artifact; the skill decides when HTML beats Markdown. Examp
 3. Starts from `assets/skeleton.html` and replaces only `<main id="doc">`, `<title>`, and `.chrome-title` — the page structure still follows the content, not a fixed template.
 4. Marks missing values as `[DATA NEEDED: ...]` and labels any derived numbers.
 5. Self-reviews against `references/interface-quality.md`, optionally with headless Chrome screenshots in both themes.
+6. Saves as `<slug>-YYYY-MM-DD.html` (generation date).
 
 </details>
 

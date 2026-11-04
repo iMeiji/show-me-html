@@ -86,7 +86,7 @@ If the artifact includes formulas, equations, statistical claims, charts, plots,
 5. Implement the full single-file HTML with inline CSS and JS.
 6. Add interactions only when they help the user understand, decide, or export.
 7. Run a self-review against `interface-quality.md`.
-8. Deliver the saved path or artifact, plus a concise note on what it contains and any deliberate chart-library deviations.
+8. Deliver the saved path (named `<slug>-YYYY-MM-DD.html`, see 文件名带日期 below) or artifact, plus a concise note on what it contains and any deliberate chart-library deviations.
 
 Bad-looking HTML is worse than good markdown. If the result looks like a generic template, restart the visual direction before shipping.
 
@@ -97,6 +97,9 @@ Bad-looking HTML is worse than good markdown. If the result looks like a generic
 - **默认视觉底板。** 以 `assets/skeleton.html` 为底，使用它的 CSS、亮/暗/跟随系统三态主题脚本和自动目录脚本。只替换 `<main id="doc">` 里的内容、`<title>` 和 `.chrome-title`。页面结构仍按 artifact brief 和内容来定，不套固定模板。只有用户要求别的风格时才不带底板。
 - **不要覆盖底板的版心和配色。** 页面自己的 `<style>` 只写内容组件（卡片、流程、列表等）的样式，不要改 `html`、`body`、`.layout`、`main#doc`、`.page-chrome`、`.chrome-inner` 的背景、边框和左右内边距（例如 `background:transparent`、`padding-inline:0`）；亮色背景和页边距由底板的 `--paper` 与 `--gutter` 决定，页面不另做"嵌入模式"。
 - **别破坏折叠块的内边距。** 底板的 `<details>` 是带背景和边框的卡片，内边距靠 `summary` 的 padding 和子元素的 `margin-inline` 实现。页面里不要给 `summary` 写 `padding:..0`，也不要用 `margin:12px 0` 这类简写去改折叠块里的元素（会清掉左右空白），改上下间距请写 `margin-block`。
+- **对齐正文左缘。** 标题、来源行、表格和卡片（.fig-box / .card / details）的左右边缘都要和正文栏对齐，不另加 `margin-inline`；`figure`、`blockquote`、`ul` 这类有浏览器默认缩进的元素交给底板重置，页面里不再写左右外边距。
+- **卡片不套框，长证据统一收起。** 并排卡片（`.ev-grid`）只放标题、可信度标签和结论，卡片里不写“依据”行；不要在卡片里再放折叠块或带边框的子框（不要卡片套卡片）。完整证据、边界和来源统一放在卡片组下方一个默认收起的“证据与边界”折叠块里，该区块不重复卡片已写的内容，每张卡都要有对应条目；不做悬停显示（触屏、键盘和打印都看不到）。
+- **文件名带日期。** 输出文件命名为 `<描述性短名>-YYYY-MM-DD.html`。短名用小写英文加连字符，概括主题，例如 `profilingmanager-anr-eval-2026-11-04.html`。日期取生成当天的本地日期；报告覆盖一段时间也用生成日期，不用区间。同一天重名时加 `-2`、`-3` 等后缀，不覆盖已有文件。
 - **收尾自检。** 交付前用 390px 宽度截一张手机图，确认正文左右都有边距、折叠块展开后文字不贴边、亮色背景是底板的暖灰纸色。
 - **自包含。** 字体由底板从 Google Fonts 异步加载，取不到时回退到系统字体栈（`--font-serif`、`--font-sans`、`--font-mono`），离线也能正常阅读；除此之外不引用其他 CDN、外部脚本或图片。图表可以用内联 SVG/CSS，并按第 13 条在最终说明里写明理由。
 - **不编造数据。** 缺失的值写 `[DATA NEEDED: ...]`。自己算出的数字要标注算法，并说明原文没有这个数。

@@ -67,7 +67,7 @@ Reuse the skeleton's classes (`.eyebrow`, `.lede`, `.metric-band`, `.stat-num`, 
 
 2. **数据来源行。** 每张表、每个案例、每组数字后面紧跟一行 `.src` 小字：数据来源、时间范围、查询日期。不知道的写 `[DATA NEEDED: 来源与时间范围]`，不要省略整行。
 
-3. **根因/证据卡带可信度标签。** 卡片 = 图标 + 标题与一句说明 + 右侧标签。平行的根因卡全部展开；长证据（日志、查询、样本）放进卡内默认收起的 `<details>`。标签只用这一组固定词：
+3. **根因/证据卡带可信度标签，卡片不套框。** 并排卡片用 `.ev-grid` 包起来（两张写 `data-cols="2"`，三张写 `data-cols="3"`，宽屏固定三列）。每张卡只放三样：标题、标题行右侧的可信度标签（不折行）、两三行结论。卡片里不写“依据”行，不放折叠块，也不放带边框的子框。完整证据、边界和来源统一放进卡片组下方一个默认收起的“证据与边界”折叠块，按卡片顺序列出，每张卡都要有对应条目；该区块只写卡片没说的内容（推理过程、边界和反例、来源），不重复卡片里的结论或数字。来源用 `.src` 小字，放在卡片外。不做悬停显示：触屏、键盘和打印都看不到。标签只用这一组固定词，第一组卡片下面放一行静态说明：
 
 | 标签 | 含义 | badge |
 | --- | --- | --- |
@@ -77,21 +77,40 @@ Reuse the skeleton's classes (`.eyebrow`, `.lede`, `.metric-band`, `.stat-num`, 
 | 待验证 | 假设，需要补数据或实验 | `data-variant="outline"` |
 
 ```html
-<article class="card">
-  <header style="display:flex;gap:.75rem;align-items:flex-start">
-    <span aria-hidden="true">⏱</span>
-    <div><h3>[根因标题]</h3><p>[一句话说明机制和影响面]</p></div>
-    <span class="card-action"><span class="badge" data-tone="cactus">已实测</span></span>
-  </header>
-  <details>
-    <summary>证据</summary>
-    <p>[关键日志、复现步骤、对照数据]</p>
+<div class="ev-grid" data-cols="2">
+  <article class="card">
+    <header><h3>[结论 A]</h3><span class="badge" data-tone="cactus">已实测</span></header>
+    <section><p>[两三行：机制、影响面、量级]</p></section>
+  </article>
+  <article class="card">
+    <header><h3>[结论 B]</h3><span class="badge" data-tone="sky">日志佐证</span></header>
+    <section><p>[两三行说明]</p></section>
+  </article>
+</div>
+<p class="ev-legend" aria-label="标签说明">
+  <span><span class="badge" data-tone="cactus">已实测</span>复现过或有对照实验</span>
+  <span><span class="badge" data-tone="sky">日志佐证</span>线上日志或指标支持</span>
+  <span><span class="badge" data-tone="manilla">推断</span>由间接证据推出</span>
+  <span><span class="badge" data-variant="outline">待验证</span>需要补数据或实验</span>
+</p>
+<details class="ev-more">
+  <summary>证据与边界（2 项）</summary>
+  <div>
+    <h4>[结论 A]<span class="badge" data-tone="cactus">已实测</span></h4>
+    <p>[推理过程：关键日志、复现步骤、对照数据，不重复卡片结论]</p>
+    <p><strong>边界：</strong>[没覆盖到的情况]</p>
     <p class="src">来源：[系统]；范围：[时间范围]；查询于 [日期]。</p>
-  </details>
-</article>
+  </div>
+  <div>
+    <h4>[结论 B]<span class="badge" data-tone="sky">日志佐证</span></h4>
+    <p>[证据]</p>
+    <p><strong>边界：</strong>[边界]</p>
+    <p class="src">来源：[系统]；范围：[时间范围]；查询于 [日期]。</p>
+  </div>
+</details>
 ```
 
-图标用一个字符或一个复用的 `<symbol>`，不要每张卡内嵌整段 SVG。
+同排卡片自然等高；窄屏自动单列。图标如需要，用一个字符或一个复用的 `<symbol>`，不要每张卡内嵌整段 SVG。
 
 4. **表格里的条形图。** 比率列旁边加一列 `<progress>`，给它固定列宽，数字列保持右对齐、可排序。
 

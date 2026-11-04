@@ -117,6 +117,7 @@ cp -R show-me-html ~/.agents/skills/show-me-html
 3. 以 `assets/skeleton.html` 为底，只替换 `<main id="doc">`、`<title>` 和 `.chrome-title`，页面结构仍按内容来定，不套固定模板。
 4. 缺失数据写 `[DATA NEEDED: ...]`，推算出的数字注明算法。
 5. 对照 `references/interface-quality.md` 自检，可用无头 Chrome 截亮暗两张图检查。
+6. 保存为 `<短名>-YYYY-MM-DD.html`（生成当天日期）。
 
 </details>
 
