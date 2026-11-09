@@ -553,8 +553,10 @@ textarea:disabled {
   color: var(--color-destructive);
 }
 
+/* 不写 width: 100%：块级元素本来就占满容器；写了再叠上外边距（如 details 内的 margin-inline），
+   盒子就比容器宽、从右侧溢出。 */
 .table-container {
-  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -1579,7 +1581,12 @@ figure {
   background: none;
   padding: 0;
 }
-/* 汉字没有大小写，0.08em 字距和 10px 字号只会让它更难读 */
+/* 汉字没有大小写，0.08em 字距和 10px 字号只会让它更难读。
+   大写变换在中文行里只改得到夹在其中的英文：data/events/x.jsonl 会变成 DATA/EVENTS/X.JSONL，
+   GitLab 变成 GITLAB —— 路径和专有名词被改写，所以中文页一并关掉 */
+:lang(zh) :is(.fig-src, .src, .eyebrow) {
+  text-transform: none;
+}
 :lang(zh) :is(.fig-src, .src) {
   font-size: 0.75rem;
   letter-spacing: 0.02em;
