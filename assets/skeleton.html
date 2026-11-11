@@ -2767,17 +2767,63 @@ body[data-recipe="share-card"] {
 .f-s{fill:var(--color-muted-foreground);font:13px var(--font-sans);text-anchor:middle}
 .f-line{stroke:var(--hero);stroke-width:2}.f-arrow{fill:var(--hero)}
 .smh-bars{display:grid;gap:.45rem}
-.smh-bars .b{display:grid;grid-template-columns:8.5rem 1fr 3.5rem;align-items:center;gap:.6rem;font-size:.85rem}
-.smh-bars i{display:block;height:.9rem;width:var(--w);background:var(--ink-22);border-radius:3px}
+.smh-bars .b{display:grid;grid-template-columns:8.5rem 1fr minmax(3.5rem,auto);align-items:center;gap:.6rem;font-size:.85rem}
+.smh-bars i{display:block;height:.9rem;width:var(--w);min-width:3px;background:var(--ink-22);border-radius:3px}
 .smh-bars .mine i{background:var(--ink-60)}.smh-bars .hot i{background:var(--hero)}
 .smh-bars b{font-family:var(--font-mono);font-weight:500;text-align:right}
-@media (max-width:480px){.smh-bars .b{grid-template-columns:6.5rem 1fr 3rem;font-size:.78rem}}
+@media (max-width:480px){.smh-bars .b{grid-template-columns:6.5rem 1fr minmax(3rem,auto);font-size:.78rem}}
+/* 按状态着色：.b 上写 data-tone（或 style="--tone:…"），压过 .hot / .mine */
+.smh-bars .b:is([data-tone],[style*="--tone"]) i{background:var(--tone)}
+.smh-bars .b>span{min-width:0;overflow-wrap:anywhere}
 .t-axis{stroke:var(--color-border)}.t-ev{fill:none;stroke:var(--hero);stroke-width:3}.t-dot{fill:var(--hero)}
 .t-us{fill:none;stroke:var(--ink-45);stroke-width:2;stroke-dasharray:6 5}
 .t-v{fill:var(--color-foreground);font:600 15px var(--font-mono);text-anchor:middle}
 .t-u{fill:var(--color-muted-foreground);font:12px var(--font-sans);text-anchor:middle}
 .t-x{fill:var(--color-muted-foreground);font:12px var(--font-mono);text-anchor:middle}
 details summary{cursor:pointer;margin-block:.75rem}
+/* SVG 节点补充：.f-start 左对齐文字（左右布局的多因图），.f-em 正文色加粗（状态行），节点写 data-tone 换描边色 */
+.f-start{text-anchor:start}.f-em{fill:var(--color-foreground);font-weight:600}
+.f-node[data-tone]{stroke:var(--tone);stroke-width:2}
+/* 状态看板：.smh-board > .lane[data-tone] > .card[data-size="sm"]。任何配方都能用，不限 triage-board */
+.smh-board{display:grid;grid-template-columns:repeat(var(--lanes,4),minmax(0,1fr));gap:.75rem;margin-block:1rem 0}
+@media (max-width:900px){.smh-board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.smh-board{grid-template-columns:minmax(0,1fr)}}
+.smh-board>.lane{min-width:0;display:flex;flex-direction:column;gap:.5rem;padding:.75rem;border-radius:var(--radius-lg);background:var(--tone-surface,var(--color-card))}
+.lane[data-tone]{background:var(--tone-surface)}
+.smh-board>.lane>h3{margin:0 0 .15rem;font-size:.9rem}
+.lane>.card h4{margin:0;font-size:.9rem;line-height:1.35}
+.lane>.card p{margin:.25rem 0 0;font-size:.8rem;line-height:1.5;color:var(--color-muted-foreground)}
+.lane>.card .smh-k{font-size:.72rem;color:var(--tone-ink,var(--hero-text))}
+.lane>.card code{font-size:inherit}
+/* 长标识符不撑破卡片和看板列；表格里仍按 .table code 的规则只在 <wbr> 处断 */
+.card,.lane{overflow-wrap:anywhere}
+:is(.card,.lane) .table{overflow-wrap:break-word}
+/* 堆叠条 + 图例：段宽 --w，段色 data-tone；段内标签只写数字，窄于 5rem 的段自动隐藏标签，全称和占比写在 .smh-legend */
+.smh-stack{display:flex;gap:2px;height:2rem;border-radius:6px;overflow:hidden;margin-block:.5rem}
+.smh-stack>i{flex:0 1 var(--w);min-width:3px;display:flex;align-items:center;padding-inline:.5rem;overflow:hidden;font-style:normal;background:var(--tone,var(--ink-45));container-type:inline-size}
+.smh-stack b{font:600 .75rem var(--font-mono);color:var(--ink-fixed);white-space:nowrap}
+@container (max-width:5rem){.smh-stack b{display:none}}
+.smh-legend{display:flex;flex-wrap:wrap;gap:.35rem 1rem;margin:0;font-size:.78rem;color:var(--color-muted-foreground)}
+.smh-legend>span{display:inline-flex;align-items:center;gap:.35rem}
+.smh-legend>span::before{content:"";width:.7rem;height:.7rem;border-radius:2px;background:var(--tone,var(--ink-45))}
+/* 宽 SVG 的横向滚动容器：手机上不把整张图缩到读不了，最小宽度用 --min 调 */
+.fig-scroll{overflow-x:auto;overscroll-behavior-x:contain}
+.fig-scroll>svg{min-width:var(--min,38rem)}
+.fig-scroll:focus-visible{outline:2px solid var(--color-ring);outline-offset:2px}
+/* 可勾选清单：.field > label > input[type=checkbox] + 文字。勾选框和第一行文字居中对齐，折行文字悬挂缩进到框右侧；
+   勾选框画成圆角小框（墨色勾），不用浏览器原生方块；勾选后文字转次要色。开关（role=switch）不受影响 */
+.field>label:has(>input[type="checkbox"]:not([role="switch"])){display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:.6rem;align-items:start;color:var(--color-foreground);font-size:.9375rem;font-weight:400;line-height:1.6;cursor:pointer}
+.field+.field:has(>label>input[type="checkbox"]:not([role="switch"])){margin-block-start:.5rem}
+.field>label>input[type="checkbox"]:not([role="switch"]){appearance:none;-webkit-appearance:none;display:grid;place-items:center;width:1.125rem;height:1.125rem;margin-block-start:calc((1.6em - 1.125rem) / 2);border:1.5px solid var(--ink-30);border-radius:.375rem;background:var(--color-background);cursor:pointer;transition:background-color 140ms,border-color 140ms}
+.field>label>input[type="checkbox"]:not([role="switch"])::after{content:"";width:.3rem;height:.58rem;margin-block-start:-.12rem;border:solid var(--color-primary-foreground);border-width:0 2px 2px 0;transform:rotate(45deg) scale(0);transition:transform 140ms var(--ease-expo)}
+.field>label>input[type="checkbox"]:not([role="switch"]):checked{border-color:var(--color-primary);background:var(--color-primary)}
+.field>label>input[type="checkbox"]:not([role="switch"]):checked::after{transform:rotate(45deg) scale(1)}
+.field>label>input[type="checkbox"]:not([role="switch"]):hover{border-color:var(--ink-60)}
+.field>label>input[type="checkbox"]:not([role="switch"]):focus-visible{outline:2px solid var(--color-ring);outline-offset:2px}
+.field>label:has(>input[type="checkbox"]:not([role="switch"]):checked){color:var(--color-muted-foreground)}
+@media (prefers-reduced-motion:reduce){.field>label>input[type="checkbox"]:not([role="switch"]),.field>label>input[type="checkbox"]:not([role="switch"])::after{transition:none}}
+/* 打印：条形和色块是数据本身，和 progress 一样强制印底色；看板列底色是装饰，照常省掉 */
+@media print{.fig-scroll>svg{min-width:0}.smh-board{grid-template-columns:repeat(2,minmax(0,1fr))}.smh-bars i,.smh-stack>i,.smh-legend>span::before,.field>label>input[type="checkbox"]:checked{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style>
   </head>
   <body data-recipe="incident-report">
@@ -2868,7 +2914,7 @@ details summary{cursor:pointer;margin-block:.75rem}
           <p class="src">来源：[系统/报表名]，[读取时间与时区]。*衍生数字：由 A→B 计算，原文未给出。</p>
         </section>
 
-        <!-- ④ 证据卡 / 推进项：每项一张卡；原因/证据等细节可放进 <details> 默认收起 -->
+        <!-- ④ 证据卡 / 推进项：每项一张卡，卡里不放 <details>；需要收起的细节统一放在卡片组下方一个 details.ev-more 里，每张卡一个 h4 -->
         <section id="items">
           <h2>[推进项 / 证据：一句话概括]</h2>
           <div class="smh-grid">
@@ -2915,7 +2961,8 @@ Caused by: java.io.IOException: Permission denied</code></pre>
           </figure>
           <figure class="fig-box">
             <div class="fig-head"><span class="fig-title">[推进顺序]</span><span class="fig-sub">[副标题]</span></div>
-            <!-- SVG 流程图：.f-done 已完成，.f-hero 当前重点，.f-par 虚线=并行/非前置 -->
+            <!-- SVG 流程图：.f-done 已完成，.f-hero 当前重点，.f-par 虚线=并行/非前置；外包 .fig-scroll，手机上横滑而不是缩小 -->
+            <div class="fig-scroll" tabindex="0" role="region" aria-label="可横向滚动的图">
             <svg class="smh-flow" viewBox="0 0 760 170" role="img" aria-label="[流程描述]">
               <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" class="f-arrow"/></marker></defs>
               <rect x="10" y="20" width="200" height="64" rx="10" class="f-node f-done"/><text x="110" y="47" class="f-t">01 [步骤]</text><text x="110" y="68" class="f-s">[已完成]</text>
@@ -2924,6 +2971,7 @@ Caused by: java.io.IOException: Permission denied</code></pre>
               <line x1="210" y1="52" x2="278" y2="52" class="f-line" marker-end="url(#ar)"/><line x1="480" y1="52" x2="548" y2="52" class="f-line" marker-end="url(#ar)"/>
               <rect x="10" y="112" width="740" height="44" rx="10" class="f-node f-par"/><text x="380" y="139" class="f-s">[并行事项，不作为前置]</text>
             </svg>
+            </div>
           </figure>
         </section>
 

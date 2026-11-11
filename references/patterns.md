@@ -170,6 +170,44 @@ Use when structure is clearer as a drawing.
 - If there are many details, make the diagram navigational and show detail in a panel.
 - Avoid diagrams with so many nodes that layout stops communicating.
 
+### 多因一果
+
+几个原因叠加出一个结果（例如三个原因共同耗尽地址空间）时，左列竖排原因节点，右侧放一个 `.f-hero` 结果节点，连线汇入结果。这张图的节点数和文字长度随内容变，不做成组件：复用 `.f-*` 类，坐标按内容算。每个原因节点三行：标题、证据数字、状态（`.f-em`）。外面包 `.fig-scroll`，手机上横滑。
+
+```html
+<figure class="fig-box">
+  <div class="fig-scroll" tabindex="0" role="region" aria-label="可横向滚动的图">
+    <svg class="smh-flow" viewBox="0 0 760 330" role="img" aria-label="[三个原因] 汇入 [结果]">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" class="f-arrow"/></marker></defs>
+      <!-- 原因节点：高 92，间距 16；data-tone 按状态换描边色，未开始用 .f-par 虚线 -->
+      <rect x="10" y="10" width="330" height="92" rx="10" class="f-node" data-tone="sky"/>
+      <text x="26" y="38" class="f-t f-start">① [原因]</text>
+      <text x="26" y="62" class="f-s f-start">[证据数字]</text>
+      <text x="26" y="84" class="f-s f-start f-em">[状态]</text>
+      <rect x="10" y="118" width="330" height="92" rx="10" class="f-node" data-tone="sky"/>
+      <text x="26" y="146" class="f-t f-start">② [原因]</text>
+      <text x="26" y="170" class="f-s f-start">[证据数字]</text>
+      <text x="26" y="192" class="f-s f-start f-em">[状态]</text>
+      <rect x="10" y="226" width="330" height="92" rx="10" class="f-node f-par"/>
+      <text x="26" y="254" class="f-t f-start">③ [原因]</text>
+      <text x="26" y="278" class="f-s f-start">[证据数字]</text>
+      <text x="26" y="300" class="f-s f-start f-em">[状态]</text>
+      <!-- 连线从各原因右缘中点汇到结果左缘 -->
+      <line x1="340" y1="56" x2="428" y2="150" class="f-line" marker-end="url(#ar)"/>
+      <line x1="340" y1="164" x2="428" y2="164" class="f-line" marker-end="url(#ar)"/>
+      <line x1="340" y1="272" x2="428" y2="178" class="f-line" marker-end="url(#ar)"/>
+      <rect x="432" y="118" width="318" height="92" rx="10" class="f-node f-hero"/>
+      <text x="591" y="148" class="f-t">[结果]</text>
+      <text x="591" y="172" class="f-s">[关键数字]</text>
+      <text x="591" y="194" class="f-s">→ [表现出来的症状]</text>
+    </svg>
+  </div>
+  <p class="src">来源：[系统]；范围：[时间范围]；查询于 [日期]。</p>
+</figure>
+```
+
+一页有多张 SVG 时，`marker` 的 `id` 各取一个，不重名。
+
 ## Design systems and prototypes
 
 Use when the request is about UI, tokens, components, motion, or interaction feel.

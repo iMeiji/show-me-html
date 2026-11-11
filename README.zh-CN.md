@@ -116,7 +116,7 @@ cp -R show-me-html ~/.agents/skills/show-me-html
 2. 只读取 `references/` 里用得到的文件。
 3. 以 `assets/skeleton.html` 为底，只替换 `<main id="doc">`、`<title>` 和 `.chrome-title`，页面结构仍按内容来定，不套固定模板。
 4. 缺失数据写 `[DATA NEEDED: ...]`，推算出的数字注明算法。
-5. 对照 `references/interface-quality.md` 自检，可用无头 Chrome 截亮暗两张图检查。
+5. 对照 `references/interface-quality.md` 自检，并运行 `scripts/shoot.py --matrix` 截亮色、暗色、390px 手机、打印四张图，同时报告溢出。
 6. 保存为 `<短名>-YYYY-MM-DD.html`（生成当天日期）。
 
 </details>
@@ -129,7 +129,10 @@ show-me-html/
 ├── assets/
 │   ├── skeleton.html           # 视觉底板：CSS，主题 / 目录 / 排序 / 复制脚本
 │   └── example-claude-code-review.html  # 示例成品（不是模板）
-├── references/                 # 与上游一致，未修改
+├── scripts/
+│   └── shoot.py                # 截图（整页或按元素，2×）+ 溢出检查；只依赖标准库和 Chrome
+├── references/                 # 上游文档；patterns.md 和 components.md 有本地补充
+│   ├── components.md           # 底板现成组件的类名清单
 │   ├── interactive-tools.md
 │   ├── interface-quality.md
 │   ├── math-and-data.md
@@ -146,9 +149,10 @@ show-me-html/
 
 基于 Zhenyu Huang 的 **[hi-zhenyu/show-me-html](https://github.com/hi-zhenyu/show-me-html)**（MIT）。本项目的改动：
 
-- `SKILL.md`：原版正文原样保留，改了 `name`，末尾追加简短的中文「本地补充说明」（默认视觉底板、异步网络字体与离线回退、不编造数据、细节默认收起、脱敏、可排序表格、截图自检）。
-- 新增 `assets/skeleton.html`：视觉系统 CSS 和 shell 脚本取自 show-me-html 生成的页面，保留 Google Fonts 异步加载、以系统字体栈作离线回退，并加入原生可排序表格脚本。
-- `references/`：未修改。
+- `SKILL.md`：原版正文原样保留，改了 `name`，末尾追加简短的中文「本地补充说明」（默认视觉底板、异步网络字体与离线回退、不编造数据、细节默认收起、脱敏、可排序表格、组件清单、截图自检、何时不用 ECharts）。
+- 新增 `assets/skeleton.html`：视觉系统 CSS 和 shell 脚本取自 show-me-html 生成的页面，保留 Google Fonts 异步加载、以系统字体栈作离线回退，并加入原生可排序表格脚本。另加了状态看板（`.smh-board`）、按状态着色的横条、堆叠条（`.smh-stack`）和宽 SVG 横向滚动容器（`.fig-scroll`）。
+- 新增 `scripts/shoot.py`：用无头 Chrome 截图（主题、手机宽度、打印、按元素）并报告溢出。
+- `references/`：新增 `components.md`；`patterns.md` 加了报告模式和「多因一果」SVG 片段。其余文件未修改。
 
 详见 [NOTICE](NOTICE)。
 
