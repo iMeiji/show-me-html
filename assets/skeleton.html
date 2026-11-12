@@ -2806,6 +2806,17 @@ details summary{cursor:pointer;margin-block:.75rem}
 .smh-legend{display:flex;flex-wrap:wrap;gap:.35rem 1rem;margin:0;font-size:.78rem;color:var(--color-muted-foreground)}
 .smh-legend>span{display:inline-flex;align-items:center;gap:.35rem}
 .smh-legend>span::before{content:"";width:.7rem;height:.7rem;border-radius:2px;background:var(--tone,var(--ink-45))}
+/* 共享刻度的分段进度条：每行 标签 + 轨道 + 右侧读数。段宽 --w = 该段数量 ÷ 所有行里的最大总量，所以各行长短可直接比较；
+   轨道底色画出满刻度。段色 data-tone，不写 tone 的段为中性灰（与 .smh-legend 无 tone 项一致）。零值段不要输出 */
+.smh-tracks{display:grid;gap:.7rem}
+.smh-tracks .b{display:grid;grid-template-columns:7.5rem minmax(0,1fr) minmax(5.5rem,auto);align-items:center;gap:.9rem;font-size:.9rem}
+.smh-tracks .b>span{min-width:0;overflow-wrap:anywhere}
+.smh-tracks .t{display:flex;height:1rem;border-radius:5px;background:var(--ink-8);overflow:hidden}
+.smh-tracks .t>i{flex:0 0 var(--w);min-width:3px;background:var(--tone,var(--ink-45))}
+.smh-tracks .t>i+i{box-shadow:inset 2px 0 0 var(--color-card)}
+.smh-tracks+.smh-legend{margin-top:1rem}
+.smh-tracks .b>b{font-family:var(--font-mono);font-weight:500;font-size:.85rem;text-align:right;white-space:nowrap}
+@media (max-width:480px){.smh-tracks .b{grid-template-columns:5rem minmax(0,1fr) auto;gap:.5rem;font-size:.8rem}.smh-tracks .b>b{font-size:.75rem}}
 /* 宽 SVG 的横向滚动容器：手机上不把整张图缩到读不了，最小宽度用 --min 调 */
 .fig-scroll{overflow-x:auto;overscroll-behavior-x:contain}
 .fig-scroll>svg{min-width:var(--min,38rem)}
@@ -2823,7 +2834,7 @@ details summary{cursor:pointer;margin-block:.75rem}
 .field>label:has(>input[type="checkbox"]:not([role="switch"]):checked){color:var(--color-muted-foreground)}
 @media (prefers-reduced-motion:reduce){.field>label>input[type="checkbox"]:not([role="switch"]),.field>label>input[type="checkbox"]:not([role="switch"])::after{transition:none}}
 /* 打印：条形和色块是数据本身，和 progress 一样强制印底色；看板列底色是装饰，照常省掉 */
-@media print{.fig-scroll>svg{min-width:0}.smh-board{grid-template-columns:repeat(2,minmax(0,1fr))}.smh-bars i,.smh-stack>i,.smh-legend>span::before,.field>label>input[type="checkbox"]:checked{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+@media print{.fig-scroll>svg{min-width:0}.smh-board{grid-template-columns:repeat(2,minmax(0,1fr))}.smh-bars i,.smh-stack>i,.smh-tracks .t>i,.smh-legend>span::before,.field>label>input[type="checkbox"]:checked{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style>
   </head>
   <body data-recipe="incident-report">
