@@ -29,9 +29,31 @@
 | `.alert` | 状态条/提示框：svg 图标 + `h4` + `section`；`data-variant="destructive"` 红色 | `<div class="alert"><svg…/><h4>当前状态</h4><section><p>…</p></section></div>` |
 | `.with-rail` + `.method-rail` | 主栏 + sticky 口径侧栏（样本、定义、来源） | `<div class="with-rail"><div>主栏</div><aside class="method-rail">口径</aside></div>` |
 | `details` / `.accordion` | 默认收起的细节；多个连排包 `.accordion` | `<details><summary>证据明细</summary><p>…</p></details>` |
+| `details[data-long-details]` | 长明细：吸顶标题、表尾收起并返回标题 | 见下方「长折叠块」 |
 | `.tabs` | 标签页：`[role=tablist]` + `[role=tab]` + `[role=tabpanel]` | 结构按 WAI-ARIA tabs 写 |
 
 `.board` / `.lane` 原本只在 `body[data-recipe="triage-board"]` 下有布局（横向滚动、顶部色线），`.smh-board` 是不依赖配方的版本。配方前缀的类（`.comparison-grid`、`.milestone-spine`、`.incident-timeline`、`.request-path` 等）只在对应 `data-recipe` 下生效，换配方前先确认。
+
+## 长折叠块
+
+展开后明显超过一屏的表格、日志或证据使用 `data-long-details`；由内容长度决定，不按固定行数启用。关键结论留在块外，完整明细默认收起；确需首屏展示的内容可加 `open`。不嵌套长折叠块。
+
+```html
+<details data-long-details>
+  <summary>完整问题明细</summary>
+  <div class="table-container" tabindex="0" role="region" aria-label="问题明细，可横向滚动">
+    <table class="table sortable">
+      <thead><tr><th>问题</th><th>状态</th></tr></thead>
+      <tbody><!-- 完整数据行 --></tbody>
+    </table>
+  </div>
+  <p class="src">来源、时间范围、查询日期</p>
+</details>
+```
+
+底板自动注入「收起本节并返回标题」按钮，不手写重复按钮或另做悬浮入口。展开时标题吸附在页眉工具条下方；标题和表尾按钮都能收起当前块，将焦点与视口返回标题，其他块状态不变。原生 summary 的 Enter / Space 操作保留；关闭 JavaScript 后仍可通过标题展开收起。
+
+沿用 `.table-container` 横向滚动，不给长块设置限高或内部纵向滚动。打印时展开长块、取消吸顶并隐藏按钮，打印后恢复原状态；Markdown 导出保留全部数据并跳过按钮。普通 `details` 不启用这些增强行为。
 
 ## 标签与表单
 

@@ -108,5 +108,6 @@ Bad-looking HTML is worse than good markdown. If the result looks like a generic
 - **不编造数据。** 缺失的值写 `[DATA NEEDED: ...]`。自己算出的数字要标注算法，并说明原文没有这个数。
 - **每组数字注明来源。** 每张表、每个案例、每组关键数字后面都要跟一行小字（`.src`），写数据来源、时间范围和查询日期；不知道的写 `[DATA NEEDED: 来源与时间范围]`。
 - **细节默认收起。** 结论、关键数字和行动项保持可见；原因链、证据明细、日志和原始数据放进 `<details>`，默认收起。
+- **长表随时能收起。** 展开后明显超过一屏的明细使用 `<details data-long-details>`，用法见 `references/components.md`「长折叠块」。底板提供吸顶标题和表尾收起按钮，收起后焦点与视口返回标题；不按固定行数自动改造短块，也不新增内部纵向滚动。交付前按 `references/interface-quality.md` 验证中部／底部收起、键盘、手机、导出和打印状态恢复。
 - **脱敏。** 去掉内部主机名、绝对路径、人名、令牌和内网链接，除非用户要求保留。
 - **可排序表格。** 底板自带原生可排序表格脚本（无外部依赖）：给 `<table>` 加 `class="sortable"` 即可点击表头升/降序，数字（含逗号、%、×、“约”等）按数值排序，中文按 localeCompare。

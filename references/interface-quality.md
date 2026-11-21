@@ -95,6 +95,17 @@ Use this reference before shipping any HTML artifact with interaction, controls,
 - Wrap brand names, code tokens, and identifiers with `translate="no"` when auto-translation could corrupt them.
 - Do not disable pinch zoom with `user-scalable=no` or `maximum-scale=1`.
 
+## Long collapsible blocks
+
+For `details[data-long-details]`:
+
+- At desktop and 390px widths, open a long block and scroll into its middle: the summary stays below the page toolbar and remains clickable.
+- Close using both the summary and the footer button. Focus returns to the summary, its title is visible, and other blocks keep their state.
+- Test Enter and Space on the summary, visible keyboard focus, and a footer touch target of at least 44px. With JavaScript disabled, the native summary still works.
+- Check that narrow tables scroll horizontally inside their container without adding a second vertical scroll area. Short, unmarked details must remain unchanged.
+- Export Markdown while the block is collapsed: all data remains present and the close button text is absent.
+- Print: long blocks expand, summaries stop sticking, buttons disappear, and the previous open/closed states return after printing.
+
 ## Delivery QA
 
 - Check at least one desktop and one narrow mobile viewport.

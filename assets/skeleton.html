@@ -696,6 +696,24 @@ details > :last-child {
   margin-block-end: 1rem;
 }
 
+details[data-long-details] {
+  scroll-margin-top: calc(var(--details-chrome-height, 0px) + 12px);
+}
+details[data-long-details][open] > summary {
+  position: sticky;
+  top: var(--details-chrome-height, 0px);
+  z-index: 20;
+  background: var(--color-card);
+  border-block-end: 1px solid var(--color-border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.btn.details-close {
+  min-height: 44px;
+  max-width: calc(100% - 2rem);
+  margin-block: 1rem;
+  line-height: 1.4;
+}
+
 .tabs > [role="tablist"] {
   display: flex;
   gap: 0.25rem;
@@ -1989,6 +2007,12 @@ body.has-toc:not(.toc-side) .read-progress {
   }
 }
 @media print {
+  details[data-long-details][open] > summary {
+    position: static;
+  }
+  .details-close {
+    display: none;
+  }
   .page-chrome,
   .toc {
     display: none;
@@ -3083,6 +3107,54 @@ Caused by: java.io.IOException: Permission denied</code></pre>
   document.addEventListener("input", function (e) {
     if (e.target.matches && e.target.matches('input[type="range"]'))
       sync(e.target);
+  });
+})();
+
+/* ── 长折叠块：保留原生 summary，增加表尾收起和返回标题 ── */
+(function () {
+  var blocks = Array.from(document.querySelectorAll("details[data-long-details]"));
+  if (!blocks.length) return;
+  var chrome = document.querySelector(".page-chrome");
+  function offset() {
+    document.documentElement.style.setProperty(
+      "--details-chrome-height", chrome.getBoundingClientRect().height + "px"
+    );
+  }
+  new ResizeObserver(offset).observe(chrome, { box: "border-box" });
+  offset();
+  blocks.forEach(function (d) {
+    var summary = d.querySelector(":scope > summary");
+    function close() {
+      d.open = false;
+      summary.focus({ preventScroll: true });
+      d.scrollIntoView({ block: "start", behavior: "instant" });
+    }
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn details-close";
+    button.setAttribute("data-variant", "outline");
+    button.setAttribute("data-md-skip", "");
+    button.textContent = "收起本节并返回标题";
+    button.setAttribute("aria-label", "收起「" + summary.textContent.trim() + "」并返回标题");
+    button.addEventListener("click", close);
+    d.appendChild(button);
+    summary.addEventListener("click", function (e) {
+      if (d.open) {
+        e.preventDefault();
+        close();
+      }
+    });
+  });
+  var printStates;
+  addEventListener("beforeprint", function () {
+    if (printStates) return;
+    printStates = blocks.map(function (d) { return d.open; });
+    blocks.forEach(function (d) { d.open = true; });
+  });
+  addEventListener("afterprint", function () {
+    if (!printStates) return;
+    blocks.forEach(function (d, i) { d.open = printStates[i]; });
+    printStates = undefined;
   });
 })();
 
